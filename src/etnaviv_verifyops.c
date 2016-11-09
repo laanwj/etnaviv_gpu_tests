@@ -29,9 +29,15 @@ struct gpu_code {
     unsigned size;
 };
 
+enum compare_type {
+    CT_INT32,
+    CT_FLOAT32
+};
+
 struct op_test {
     const char *op_name;
     size_t unit_size;
+    enum compare_type compare_type;
     void (*generate_values_h)(size_t seed, void *a, size_t width);
     // Leave NULL for unary ops
     void (*generate_values_v)(size_t seed, void *b, size_t height);
@@ -168,12 +174,12 @@ static void mulu32_compute_cpu(void *out_, const void *a_, const void *b_, size_
 
 /* Tests GPU code must take from t2 and t1, and output to t0 */
 struct op_test op_tests[] = {
-    {"add", 4, i32_generate_values_h, i32_generate_values_v, addu32_compute_cpu,
+    {"add", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, addu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x00801001, 0x15602800, 0x80000000, 0x00000018, /* add.u32       t0.x___, t2.yyyy, void, t1.xxxx */
         }))
     },
-    {"mul", 4, i32_generate_values_h, i32_generate_values_v, mulu32_compute_cpu,
+    {"mul", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, mulu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0080103c, 0x15602800, 0x800000c0, 0x00000000, /* imullo0.u32   t0.x___, t2.yyyy, t1.xxxx, void */
         }))
@@ -223,7 +229,7 @@ int perform_test(struct drm_test_info *info, struct op_test *cur_test)
 
     const uint32_t *out_gpu = etna_bo_map(bo_out);
     unsigned int errors = 0;
-    if (cur_test->unit_size == 4) {
+    if (cur_test->unit_size == 4 && cur_test->compare_type == CT_INT32) {
         for(size_t y=0; y<height; ++y) {
             for(size_t x=0; x<height; ++x) {
                 uint32_t expected = ((uint32_t*)out_cpu)[y*width+x];
@@ -236,7 +242,7 @@ int perform_test(struct drm_test_info *info, struct op_test *cur_test)
         }
     } else {
         errors = 1;
-        printf("No comparison implemented for unit_size %d\n", (int)cur_test->unit_size);
+        printf("No comparison implemented for unit_size %d compare_type %d\n", (int)cur_test->unit_size, cur_test->compare_type);
     }
     if (errors == 0) {
         printf("PASS\n");
