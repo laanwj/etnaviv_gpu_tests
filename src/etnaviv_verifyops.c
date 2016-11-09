@@ -14,6 +14,8 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <math.h>
+#include <time.h>
 
 #include "drm_setup.h"
 #include "cmdstream.h"
@@ -153,7 +155,7 @@ static void addu32_compute_cpu(void *out_, const void *a_, const void *b_, size_
     uint32_t *b = (uint32_t*)b_;
 
     for(size_t y=0; y<height; ++y) {
-        for(size_t x=0; x<height; ++x) {
+        for(size_t x=0; x<width; ++x) {
             out[y*width+x] = a[x] + b[y];
         }
     }
@@ -166,24 +168,46 @@ static void mulu32_compute_cpu(void *out_, const void *a_, const void *b_, size_
     uint32_t *b = (uint32_t*)b_;
 
     for(size_t y=0; y<height; ++y) {
-        for(size_t x=0; x<height; ++x) {
+        for(size_t x=0; x<width; ++x) {
             out[y*width+x] = a[x] * b[y];
+        }
+    }
+}
+
+static void addf32_compute_cpu(void *out_, const void *a_, const void *b_, size_t width, size_t height)
+{
+    float *out = (float*)out_;
+    float *a = (float*)a_;
+    float *b = (float*)b_;
+
+    for(size_t y=0; y<height; ++y) {
+        for(size_t x=0; x<width; ++x) {
+            out[y*width+x] = a[x] + b[y];
         }
     }
 }
 
 /* Tests GPU code must take from t2 and t1, and output to t0 */
 struct op_test op_tests[] = {
-    {"add", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, addu32_compute_cpu,
+    {"add.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, addu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x00801001, 0x15602800, 0x80000000, 0x00000018, /* add.u32       t0.x___, t2.yyyy, void, t1.xxxx */
         }))
     },
-    {"mul", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, mulu32_compute_cpu,
+    // add.u16 does nothing
+    // 0x00801001, 0x15402800, 0xc0000000, 0x00000018, /* add.u16       t0.x___, t2.yyyy, void, t1.xxxx */
+#if 0
+    {"add.f32", 4, CT_FLOAT32, i32_generate_values_h, i32_generate_values_v, addf32_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x00801001, 0x15402800, 0x00000000, 0x00000018, /* add.f32       t0.x___, t2.yyyy, void, t1.xxxx */
+        }))
+    },
+#endif
+    {"imullo0.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, mulu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0080103c, 0x15602800, 0x800000c0, 0x00000000, /* imullo0.u32   t0.x___, t2.yyyy, t1.xxxx, void */
         }))
-    }
+    },
 };
 
 int perform_test(struct drm_test_info *info, struct op_test *cur_test)
@@ -191,9 +215,9 @@ int perform_test(struct drm_test_info *info, struct op_test *cur_test)
     int retval = -1;
     const size_t width = 16;
     const size_t height = 16;
-    size_t seedx = 0;
-    size_t seedy = 0;
+    size_t seedx, seedy;
     struct etna_bo *bo_out=0, *bo_in0=0, *bo_in1=0;
+    unsigned int errors = 0;
 
     size_t out_size = width * height * cur_test->unit_size;
     size_t in0_size = width * cur_test->unit_size;
@@ -202,10 +226,6 @@ int perform_test(struct drm_test_info *info, struct op_test *cur_test)
     void *out_cpu = malloc(out_size);
     void *a_cpu = malloc(in0_size);
     void *b_cpu = malloc(in1_size);
-
-    cur_test->generate_values_h(seedx, a_cpu, width);
-    cur_test->generate_values_v(seedy, b_cpu, height);
-    cur_test->compute_cpu(out_cpu, a_cpu, b_cpu, width, height);
 
     printf("%s: ", cur_test->op_name);
     fflush(stdout);
@@ -217,38 +237,45 @@ int perform_test(struct drm_test_info *info, struct op_test *cur_test)
         fprintf(stderr, "Unable to allocate buffer\n");
         goto out;
     }
+    for (int num_tries=0; num_tries<100 && !errors; ++num_tries) {
+        seedx = rand();
+        seedy = rand();
+        cur_test->generate_values_h(seedx, a_cpu, width);
+        cur_test->generate_values_v(seedy, b_cpu, height);
+        cur_test->compute_cpu(out_cpu, a_cpu, b_cpu, width, height);
 
-    memset(etna_bo_map(bo_out), 0, out_size);
-    memcpy(etna_bo_map(bo_in0), a_cpu, in0_size);
-    memcpy(etna_bo_map(bo_in1), b_cpu, in1_size);
+        memset(etna_bo_map(bo_out), 0, out_size);
+        memcpy(etna_bo_map(bo_in0), a_cpu, in0_size);
+        memcpy(etna_bo_map(bo_in1), b_cpu, in1_size);
 
-    /* generate command sequence */
-    gen_cmd_stream(info->stream, &cur_test->gpu_code, bo_out, bo_in0, bo_in1);
+        /* generate command sequence */
+        gen_cmd_stream(info->stream, &cur_test->gpu_code, bo_out, bo_in0, bo_in1);
 
-    etna_cmd_stream_finish(info->stream);
+        etna_cmd_stream_finish(info->stream);
 
-    const uint32_t *out_gpu = etna_bo_map(bo_out);
-    unsigned int errors = 0;
-    if (cur_test->unit_size == 4 && cur_test->compare_type == CT_INT32) {
-        for(size_t y=0; y<height; ++y) {
-            for(size_t x=0; x<height; ++x) {
-                uint32_t expected = ((uint32_t*)out_cpu)[y*width+x];
-                uint32_t found = ((uint32_t*)out_gpu)[y*width+x];
-                if (expected != found) {
-                    printf("Mismatch %s(%08x,%08x) -> %08x, expected %08x\n", cur_test->op_name, ((uint32_t*)a_cpu)[x], ((uint32_t*)b_cpu)[x], found, expected);
-                    errors += 1;
+        const uint32_t *out_gpu = etna_bo_map(bo_out);
+        if (cur_test->unit_size == 4 && cur_test->compare_type == CT_INT32) {
+            for(size_t y=0; y<height; ++y) {
+                for(size_t x=0; x<height; ++x) {
+                    uint32_t expected = ((uint32_t*)out_cpu)[y*width+x];
+                    uint32_t found = ((uint32_t*)out_gpu)[y*width+x];
+                    if (expected != found) {
+                        if (errors < 10)
+                            printf("Mismatch %s(%08x,%08x) -> %08x, expected %08x\n", cur_test->op_name, ((uint32_t*)a_cpu)[x], ((uint32_t*)b_cpu)[y], found, expected);
+                        errors += 1;
+                    }
                 }
             }
+        } else {
+            errors = 1;
+            printf("No comparison implemented for unit_size %d compare_type %d\n", (int)cur_test->unit_size, cur_test->compare_type);
         }
-    } else {
-        errors = 1;
-        printf("No comparison implemented for unit_size %d compare_type %d\n", (int)cur_test->unit_size, cur_test->compare_type);
     }
     if (errors == 0) {
         printf("PASS\n");
         retval = 0;
     } else {
-        printf("FAIL\n");
+        printf("FAIL (seedx %u seedy %u)\n", (unsigned)seedx, (unsigned)seedy);
         retval = 1;
     }
 
@@ -265,6 +292,7 @@ out:
 
 int main(int argc, char *argv[])
 {
+    srand(time(NULL));
     struct drm_test_info *info;
     if ((info = drm_test_setup(argc, argv)) == NULL) {
         return 1;
