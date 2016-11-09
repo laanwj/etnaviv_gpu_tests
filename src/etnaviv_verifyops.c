@@ -13,6 +13,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include "drm_setup.h"
 #include "cmdstream.h"
@@ -35,7 +36,7 @@ struct op_test {
     // Leave NULL for unary ops
     void (*generate_values_v)(size_t seed, void *b, size_t height);
     void (*compute_cpu)(void *out, const void *a, const void *b, size_t width, size_t height);
-    struct gpu_code code;
+    struct gpu_code gpu_code;
 };
 
 struct gpu_code prelude = GPU_CODE(((uint32_t[]){
@@ -45,7 +46,6 @@ struct gpu_code prelude = GPU_CODE(((uint32_t[]){
     0x01021009, 0x00000000, 0x00000000, 0x00154018,  /* mov   t2._y__, void, void, t1.yyyy            */
     0x00801019, 0x15600800, 0x80010000, 0x203fc008,  /* lshift.u32    t0.x___, t0.yyyy, void, u0.wwww */
     0x00811032, 0x2aa00800, 0x80000050, 0x00000000,  /* load.u32      t1.x___, u0.zzzz, t0.xxxx, void */
-    0x00801009, 0x00000000, 0x00000000, 0x00000018,  /* mov   t0.x___, void, void, t1.xxxx            */
 }));
 
 struct gpu_code postlude = GPU_CODE(((uint32_t[]){
@@ -54,9 +54,22 @@ struct gpu_code postlude = GPU_CODE(((uint32_t[]){
     0x00000000, 0x00000000, 0x00000000, 0x00000000,  /* nop   void, void, void, void                  */
 }));
 
-static void gen_cmd_stream(struct etna_cmd_stream *stream, struct etna_bo *out, struct etna_bo *in0, struct etna_bo *in1)
+#define MAX_INST 1024
+static void gen_cmd_stream(struct etna_cmd_stream *stream, struct gpu_code *gpu_code, struct etna_bo *out, struct etna_bo *in0, struct etna_bo *in1)
 {
-    unsigned num_inst = 10;
+    unsigned num_inst;
+    uint32_t code[MAX_INST*4];
+    unsigned code_ptr = 0;
+
+    for (unsigned i=0; i<prelude.size; ++i)
+        code[code_ptr++] = prelude.code[i];
+    for (unsigned i=0; i<gpu_code->size; ++i)
+        code[code_ptr++] = gpu_code->code[i];
+    for (unsigned i=0; i<postlude.size; ++i)
+        code[code_ptr++] = postlude.code[i];
+    assert((code_ptr & 3)==0);
+    num_inst = code_ptr / 4; // number of instructions including final nop
+
     etna_set_state(stream, VIVS_PA_SYSTEM_MODE, VIVS_PA_SYSTEM_MODE_UNK0 | VIVS_PA_SYSTEM_MODE_UNK4);
     etna_set_state(stream, VIVS_GL_API_MODE, VIVS_GL_API_MODE_OPENCL);
 
@@ -82,52 +95,10 @@ static void gen_cmd_stream(struct etna_cmd_stream *stream, struct etna_bo *out, 
     etna_set_state(stream, VIVS_GL_VARYING_NUM_COMPONENTS, VIVS_GL_VARYING_NUM_COMPONENTS_VAR0(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR1(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR2(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR3(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR4(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR5(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR6(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR7(0x0));
     etna_set_state(stream, VIVS_GL_UNK03834, 0x0);
     etna_set_state(stream, VIVS_VS_NEW_UNK00860, 0x0);
-    etna_set_state(stream, VIVS_VS_RANGE, VIVS_VS_RANGE_LOW(0x0) | VIVS_VS_RANGE_HIGH(num_inst - 1));
+    etna_set_state(stream, VIVS_VS_RANGE, VIVS_VS_RANGE_LOW(0x0) | VIVS_VS_RANGE_HIGH(num_inst - 2));
 
-    etna_set_state(stream, VIVS_SH_INST_MEM(0), 0x82100c);
-    etna_set_state(stream, VIVS_SH_INST_MEM(1), 0x15600800);
-    etna_set_state(stream, VIVS_SH_INST_MEM(2), 0x800100c0);
-    etna_set_state(stream, VIVS_SH_INST_MEM(3), 0xa);
-    etna_set_state(stream, VIVS_SH_INST_MEM(4), 0x1021019);
-    etna_set_state(stream, VIVS_SH_INST_MEM(5), 0x200800);
-    etna_set_state(stream, VIVS_SH_INST_MEM(6), 0x80010000);
-    etna_set_state(stream, VIVS_SH_INST_MEM(7), 0x203fc008);
-    etna_set_state(stream, VIVS_SH_INST_MEM(8), 0x1011032);
-    etna_set_state(stream, VIVS_SH_INST_MEM(9), 0x15600800);
-    etna_set_state(stream, VIVS_SH_INST_MEM(10), 0x80aa0150);
-    etna_set_state(stream, VIVS_SH_INST_MEM(11), 0x0);
-    etna_set_state(stream, VIVS_SH_INST_MEM(12), 0x1021009);
-    etna_set_state(stream, VIVS_SH_INST_MEM(13), 0x0);
-    etna_set_state(stream, VIVS_SH_INST_MEM(14), 0x0);
-    etna_set_state(stream, VIVS_SH_INST_MEM(15), 0x154018);
-    etna_set_state(stream, VIVS_SH_INST_MEM(16), 0x801019);
-    etna_set_state(stream, VIVS_SH_INST_MEM(17), 0x15600800);
-    etna_set_state(stream, VIVS_SH_INST_MEM(18), 0x80010000);
-    etna_set_state(stream, VIVS_SH_INST_MEM(19), 0x203fc008);
-    etna_set_state(stream, VIVS_SH_INST_MEM(20), 0x811032);
-    etna_set_state(stream, VIVS_SH_INST_MEM(21), 0x2aa00800);
-    etna_set_state(stream, VIVS_SH_INST_MEM(22), 0x80000050);
-    etna_set_state(stream, VIVS_SH_INST_MEM(23), 0x0);
-    etna_set_state(stream, VIVS_SH_INST_MEM(24), 0x801009);
-    etna_set_state(stream, VIVS_SH_INST_MEM(25), 0x0);
-    etna_set_state(stream, VIVS_SH_INST_MEM(26), 0x0);
-    etna_set_state(stream, VIVS_SH_INST_MEM(27), 0x18);
-    etna_set_state(stream, VIVS_SH_INST_MEM(28), 0x801001);
-    etna_set_state(stream, VIVS_SH_INST_MEM(29), 0x15602800);
-    etna_set_state(stream, VIVS_SH_INST_MEM(30), 0x80000000);
-    etna_set_state(stream, VIVS_SH_INST_MEM(31), 0x8);
-    etna_set_state(stream, VIVS_SH_INST_MEM(32), 0x1001019);
-    etna_set_state(stream, VIVS_SH_INST_MEM(33), 0x202800);
-    etna_set_state(stream, VIVS_SH_INST_MEM(34), 0x80010000);
-    etna_set_state(stream, VIVS_SH_INST_MEM(35), 0x203fc008);
-    etna_set_state(stream, VIVS_SH_INST_MEM(36), 0x800033);
-    etna_set_state(stream, VIVS_SH_INST_MEM(37), 0x200800);
-    etna_set_state(stream, VIVS_SH_INST_MEM(38), 0x80aa0050);
-    etna_set_state(stream, VIVS_SH_INST_MEM(39), 0x8);
-    etna_set_state(stream, VIVS_SH_INST_MEM(40), 0x0);
-    etna_set_state(stream, VIVS_SH_INST_MEM(41), 0x0);
-    etna_set_state(stream, VIVS_SH_INST_MEM(42), 0x0);
-    etna_set_state(stream, VIVS_SH_INST_MEM(43), 0x0);
+    for (unsigned i=0; i<code_ptr; ++i)
+        etna_set_state(stream, VIVS_SH_INST_MEM(i), code[i]);
 
     etna_set_state(stream, VIVS_PS_INPUT_COUNT, VIVS_PS_INPUT_COUNT_COUNT(1) | VIVS_PS_INPUT_COUNT_UNK8(31));
     etna_set_state(stream, VIVS_PS_TEMP_REGISTER_CONTROL, VIVS_PS_TEMP_REGISTER_CONTROL_NUM_TEMPS(10));
@@ -169,7 +140,7 @@ void i32_generate_values_v(size_t seed, void *b, size_t height)
     }
 }
 
-void add_compute_cpu(void *out_, const void *a_, const void *b_, size_t width, size_t height)
+static void addu32_compute_cpu(void *out_, const void *a_, const void *b_, size_t width, size_t height)
 {
     uint32_t *out = (uint32_t*)out_;
     uint32_t *a = (uint32_t*)a_;
@@ -182,11 +153,29 @@ void add_compute_cpu(void *out_, const void *a_, const void *b_, size_t width, s
     }
 }
 
+static void mulu32_compute_cpu(void *out_, const void *a_, const void *b_, size_t width, size_t height)
+{
+    uint32_t *out = (uint32_t*)out_;
+    uint32_t *a = (uint32_t*)a_;
+    uint32_t *b = (uint32_t*)b_;
 
+    for(size_t y=0; y<height; ++y) {
+        for(size_t x=0; x<height; ++x) {
+            out[y*width+x] = a[x] * b[y];
+        }
+    }
+}
+
+/* Tests GPU code must take from t2 and t1, and output to t0 */
 struct op_test op_tests[] = {
-    {"add", 4, i32_generate_values_h, i32_generate_values_v, add_compute_cpu,
+    {"add", 4, i32_generate_values_h, i32_generate_values_v, addu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
-            0x00801001, 0x15602800, 0x80000000, 0x00000008  /* add.u32       t0.x___, t2.yyyy, void, t0.xxxx */
+            0x00801001, 0x15602800, 0x80000000, 0x00000018, /* add.u32       t0.x___, t2.yyyy, void, t1.xxxx */
+        }))
+    },
+    {"mul", 4, i32_generate_values_h, i32_generate_values_v, mulu32_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x0080103c, 0x15602800, 0x800000c0, 0x00000000, /* imullo0.u32   t0.x___, t2.yyyy, t1.xxxx, void */
         }))
     }
 };
@@ -228,7 +217,7 @@ int perform_test(struct drm_test_info *info, struct op_test *cur_test)
     memcpy(etna_bo_map(bo_in1), b_cpu, in1_size);
 
     /* generate command sequence */
-    gen_cmd_stream(info->stream, bo_out, bo_in0, bo_in1);
+    gen_cmd_stream(info->stream, &cur_test->gpu_code, bo_out, bo_in0, bo_in1);
 
     etna_cmd_stream_finish(info->stream);
 
