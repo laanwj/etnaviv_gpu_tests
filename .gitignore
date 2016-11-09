@@ -1,0 +1,16 @@
+bin
+configure
+config.log
+autom4te.cache
+Makefile
+aclocal.m4
+config.status
+Makefile.in
+.deps
+
+*.o
+*.a
+*.swp
+
+src/etnaviv_cl_test
+
