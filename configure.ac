@@ -30,7 +30,7 @@ if test "x$have_libdrm" != xyes; then
 fi
 
 # Flags
-CFLAGS="$CFLAGS -Wall -Wextra -O2 -g"
+CFLAGS="$CFLAGS -Wall -Wextra -O2 -g -std=c99"
 
 # Generate makefiles
 AC_CONFIG_FILES([Makefile src/Makefile])

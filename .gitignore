@@ -13,4 +13,4 @@ Makefile.in
 *.swp
 
 src/etnaviv_cl_test
-
+src/etnaviv_verifyops
