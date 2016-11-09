@@ -148,12 +148,8 @@ void i32_generate_values_v(size_t seed, void *b, size_t height)
     }
 }
 
-static void addu32_compute_cpu(void *out_, const void *a_, const void *b_, size_t width, size_t height)
+static void addu32_compute_cpu(uint32_t *out, const uint32_t *a, const uint32_t *b, size_t width, size_t height)
 {
-    uint32_t *out = (uint32_t*)out_;
-    uint32_t *a = (uint32_t*)a_;
-    uint32_t *b = (uint32_t*)b_;
-
     for(size_t y=0; y<height; ++y) {
         for(size_t x=0; x<width; ++x) {
             out[y*width+x] = a[x] + b[y];
@@ -161,12 +157,8 @@ static void addu32_compute_cpu(void *out_, const void *a_, const void *b_, size_
     }
 }
 
-static void mulu32_compute_cpu(void *out_, const void *a_, const void *b_, size_t width, size_t height)
+static void mulu32_compute_cpu(uint32_t *out, const uint32_t *a, const uint32_t *b, size_t width, size_t height)
 {
-    uint32_t *out = (uint32_t*)out_;
-    uint32_t *a = (uint32_t*)a_;
-    uint32_t *b = (uint32_t*)b_;
-
     for(size_t y=0; y<height; ++y) {
         for(size_t x=0; x<width; ++x) {
             out[y*width+x] = a[x] * b[y];
@@ -174,12 +166,8 @@ static void mulu32_compute_cpu(void *out_, const void *a_, const void *b_, size_
     }
 }
 
-static void addf32_compute_cpu(void *out_, const void *a_, const void *b_, size_t width, size_t height)
+static void addf32_compute_cpu(float *out, const float *a, const float *b, size_t width, size_t height)
 {
-    float *out = (float*)out_;
-    float *a = (float*)a_;
-    float *b = (float*)b_;
-
     for(size_t y=0; y<height; ++y) {
         for(size_t x=0; x<width; ++x) {
             out[y*width+x] = a[x] + b[y];
@@ -187,9 +175,72 @@ static void addf32_compute_cpu(void *out_, const void *a_, const void *b_, size_
     }
 }
 
-/* Tests GPU code must take from t2 and t1, and output to t0 */
+static void lshiftu32_compute_cpu(uint32_t *out, const uint32_t *a, const uint32_t *b, size_t width, size_t height)
+{
+    for(size_t y=0; y<height; ++y) {
+        for(size_t x=0; x<width; ++x) {
+            out[y*width+x] = a[x] << (b[y]&31);
+        }
+    }
+}
+
+static void rshiftu32_compute_cpu(uint32_t *out, const uint32_t *a, const uint32_t *b, size_t width, size_t height)
+{
+    for(size_t y=0; y<height; ++y) {
+        for(size_t x=0; x<width; ++x) {
+            out[y*width+x] = a[x] >> (b[y]&31);
+        }
+    }
+}
+
+static void rotateu32_compute_cpu(uint32_t *out, const uint32_t *a, const uint32_t *b, size_t width, size_t height)
+{
+    for(size_t y=0; y<height; ++y) {
+        for(size_t x=0; x<width; ++x) {
+            out[y*width+x] = (a[x] << (b[y]&31)) | (a[x] >> ((32-b[y])&31));
+        }
+    }
+}
+
+static void oru32_compute_cpu(uint32_t *out, const uint32_t *a, const uint32_t *b, size_t width, size_t height)
+{
+    for(size_t y=0; y<height; ++y) {
+        for(size_t x=0; x<width; ++x) {
+            out[y*width+x] = a[x] | b[y];
+        }
+    }
+}
+
+static void andu32_compute_cpu(uint32_t *out, const uint32_t *a, const uint32_t *b, size_t width, size_t height)
+{
+    for(size_t y=0; y<height; ++y) {
+        for(size_t x=0; x<width; ++x) {
+            out[y*width+x] = a[x] & b[y];
+        }
+    }
+}
+
+static void xoru32_compute_cpu(uint32_t *out, const uint32_t *a, const uint32_t *b, size_t width, size_t height)
+{
+    for(size_t y=0; y<height; ++y) {
+        for(size_t x=0; x<width; ++x) {
+            out[y*width+x] = a[x] ^ b[y];
+        }
+    }
+}
+
+static void notu32_compute_cpu(uint32_t *out, const uint32_t *a, const uint32_t *b, size_t width, size_t height)
+{
+    for(size_t y=0; y<height; ++y) {
+        for(size_t x=0; x<width; ++x) {
+            out[y*width+x] = ~a[x];
+        }
+    }
+}
+
+/* Tests GPU code must take from a[x] t2.y and b[y] t1.x, and output to t0.x */
 struct op_test op_tests[] = {
-    {"add.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, addu32_compute_cpu,
+    {"add.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)addu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x00801001, 0x15602800, 0x80000000, 0x00000018, /* add.u32       t0.x___, t2.yyyy, void, t1.xxxx */
         }))
@@ -197,15 +248,51 @@ struct op_test op_tests[] = {
     // add.u16 does nothing
     // 0x00801001, 0x15402800, 0xc0000000, 0x00000018, /* add.u16       t0.x___, t2.yyyy, void, t1.xxxx */
 #if 0
-    {"add.f32", 4, CT_FLOAT32, i32_generate_values_h, i32_generate_values_v, addf32_compute_cpu,
+    // Need an effective way of comparing these
+    {"add.f32", 4, CT_FLOAT32, i32_generate_values_h, i32_generate_values_v, (void*)addf32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x00801001, 0x15402800, 0x00000000, 0x00000018, /* add.f32       t0.x___, t2.yyyy, void, t1.xxxx */
         }))
     },
 #endif
-    {"imullo0.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, mulu32_compute_cpu,
+    {"imullo0.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)mulu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0080103c, 0x15602800, 0x800000c0, 0x00000000, /* imullo0.u32   t0.x___, t2.yyyy, t1.xxxx, void */
+        }))
+    },
+    {"lshift.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)lshiftu32_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x00801019, 0x15602800, 0x80010000, 0x00000018, /* lshift.u32   t0.x___, t2.yyyy, void, t1.xxxx */
+        }))
+    },
+    {"rshift.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)rshiftu32_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x0080101a, 0x15602800, 0x80010000, 0x00000018, /* rshift.u32   t0.x___, t2.yyyy, void, t1.xxxx */
+        }))
+    },
+    {"rotate.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)rotateu32_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x0080101b, 0x15602800, 0x80010000, 0x00000018, /* rotate.u32   t0.x___, t2.yyyy, void, t1.xxxx */
+        }))
+    },
+    {"or.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)oru32_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x0080101c, 0x15602800, 0x80010000, 0x00000018, /* or.u32   t0.x___, t2.yyyy, void, t1.xxxx */
+        }))
+    },
+    {"and.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)andu32_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x0080101d, 0x15602800, 0x80010000, 0x00000018, /* and.u32   t0.x___, t2.yyyy, void, t1.xxxx */
+        }))
+    },
+    {"xor.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)xoru32_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x0080101e, 0x15602800, 0x80010000, 0x00000018, /* xor.u32   t0.x___, t2.yyyy, void, t1.xxxx */
+        }))
+    },
+    {"not.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)notu32_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x0080101f, 0x00200000, 0x80010000, 0x00154028, /* not.u32   t0.x___, void, void, t2.yyyy */
         }))
     },
 };
