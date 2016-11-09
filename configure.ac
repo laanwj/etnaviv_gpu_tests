@@ -10,6 +10,7 @@ AM_INIT_AUTOMAKE([foreign]) # tar-ustar dist-xz subdir-objects])
 dnl Check for progs
 AC_PROG_CPP
 AC_PROG_CC
+AC_PROG_RANLIB
 AC_CHECK_PROGS([PYTHON3], [python3])
 AC_PROG_SED
 

@@ -33,46 +33,14 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <xf86drm.h>
-#include <etnaviv_drmif.h>
+#include "drm_setup.h"
+#include "cmdstream.h"
 
 #include "state.xml.h"
 #include "state_3d.xml.h"
 #include "common.xml.h"
-#include "cmdstream.xml.h"
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
-
-static inline void etna_emit_load_state(struct etna_cmd_stream *stream,
-        const uint16_t offset, const uint16_t count)
-{
-    uint32_t v;
-
-    v =     (VIV_FE_LOAD_STATE_HEADER_OP_LOAD_STATE | VIV_FE_LOAD_STATE_HEADER_OFFSET(offset) |
-            (VIV_FE_LOAD_STATE_HEADER_COUNT(count) & VIV_FE_LOAD_STATE_HEADER_COUNT__MASK));
-
-    etna_cmd_stream_emit(stream, v);
-}
-
-static inline void etna_set_state(struct etna_cmd_stream *stream, uint32_t address, uint32_t value)
-{
-    etna_cmd_stream_reserve(stream, 2);
-    etna_emit_load_state(stream, address >> 2, 1);
-    etna_cmd_stream_emit(stream, value);
-}
-
-static inline void etna_set_state_from_bo(struct etna_cmd_stream *stream,
-        uint32_t address, struct etna_bo *bo)
-{
-    etna_cmd_stream_reserve(stream, 2);
-    etna_emit_load_state(stream, address >> 2, 1);
-
-    etna_cmd_stream_reloc(stream, &(struct etna_reloc){
-        .bo = bo,
-        .flags = ETNA_RELOC_WRITE,
-        .offset = 0,
-    });
-}
 
 static void gen_cmd_stream(struct etna_cmd_stream *stream, struct etna_bo *bmp)
 {
@@ -217,72 +185,24 @@ static void gen_cmd_stream(struct etna_cmd_stream *stream, struct etna_bo *bmp)
 
 int main(int argc, char *argv[])
 {
-    const size_t out_size = 65536;
-
-    struct etna_device *dev;
-    struct etna_gpu *gpu;
-    struct etna_pipe *pipe;
+    struct drm_test_info *info;
     struct etna_bo *bmp;
-    struct etna_cmd_stream *stream;
-
-    drmVersionPtr version;
-    int fd, ret = 0;
-
-        if (argc < 2) {
-            printf("Usage: %s /dev/dri/...\n", argv[0]);
-            return 1;
-        }
-
-    fd = open(argv[1], O_RDWR);
-    if (fd < 0)
+    static const size_t out_size = 65536;
+    if ((info = drm_test_setup(argc, argv)) == NULL) {
         return 1;
-
-    version = drmGetVersion(fd);
-    if (version) {
-        printf("Version: %d.%d.%d\n", version->version_major,
-               version->version_minor, version->version_patchlevel);
-        printf("  Name: %s\n", version->name);
-        printf("  Date: %s\n", version->date);
-        printf("  Description: %s\n", version->desc);
-        drmFreeVersion(version);
     }
 
-    dev = etna_device_new(fd);
-    if (!dev) {
-        ret = 2;
-        goto out;
-    }
-
-    /* TODO: we assume that core 1 is a 3D+CL capable one */
-    gpu = etna_gpu_new(dev, 1);
-    if (!gpu) {
-        ret = 3;
-        goto out_device;
-    }
-
-    pipe = etna_pipe_new(gpu, ETNA_PIPE_3D);
-    if (!pipe) {
-        ret = 4;
-        goto out_gpu;
-    }
-
-    bmp = etna_bo_new(dev, out_size, DRM_ETNA_GEM_CACHE_UNCACHED);
+    bmp = etna_bo_new(info->dev, out_size, DRM_ETNA_GEM_CACHE_UNCACHED);
     if (!bmp) {
-        ret = 5;
-        goto out_pipe;
+        fprintf(stderr, "Unable to allocate buffer\n");
+        goto out;
     }
     memset(etna_bo_map(bmp), 0, out_size);
 
-    stream = etna_cmd_stream_new(pipe, 0x3000, NULL, NULL);
-    if (!stream) {
-        ret = 6;
-        goto out_bo;
-    }
-
     /* generate command sequence */
-    gen_cmd_stream(stream, bmp);
+    gen_cmd_stream(info->stream, bmp);
 
-    etna_cmd_stream_finish(stream);
+    etna_cmd_stream_finish(info->stream);
 
     const unsigned char *data = etna_bo_map(bmp);
     for(int i=0; i<0x100; ++i) {
@@ -291,22 +211,9 @@ int main(int argc, char *argv[])
     printf("\n");
     printf("%s\n", data);
 
-    etna_cmd_stream_del(stream);
-
-out_bo:
-    etna_bo_del(bmp);
-
-out_pipe:
-    etna_pipe_del(pipe);
-
-out_gpu:
-    etna_gpu_del(gpu);
-
-out_device:
-    etna_device_del(dev);
-
+    drm_test_teardown(info);
+    return 0;
 out:
-    close(fd);
-
-    return ret;
+    drm_test_teardown(info);
+    return 1;
 }
