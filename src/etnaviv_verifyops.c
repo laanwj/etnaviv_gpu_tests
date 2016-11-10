@@ -50,12 +50,10 @@ struct op_test {
 
 struct gpu_code prelude = GPU_CODE(((uint32_t[]){
     0x00821019, 0x00200800, 0x80010000, 0x203fc008,  /* lshift.u32  t2.x___, t0.xxxx, void, u0.wwww */
-    0x07811032, 0x15600800, 0x80000150, 0x00000000,  /* load.u32    t1, u0.yyyy, t2.xxxx, void */
-    0x07821009, 0x00000000, 0x00000000, 0x00390018,  /* mov t2, void, void, t1 */
+    0x07821032, 0x15600800, 0x80000150, 0x00000000,  /* load.u32    t2, u0.yyyy, t2.xxxx, void */
     0x00831019, 0x15600800, 0x80010000, 0x203fc008,  /* lshift.u32  t3.x___, t0.yyyy, void, u0.wwww */
-    0x07811032, 0x2aa00800, 0x800001d0, 0x00000000,  /* load.u32    t1, u0.zzzz, t3.xxxx, void */
-    0x07831009, 0x00000000, 0x00000000, 0x00390018,  /* mov t3, void, void, t1 */
-    0x07841009, 0x00000000, 0x00000000, 0x20390028,  /* mov t4, void, void, u2 */
+    0x07831032, 0x2aa00800, 0x800001d0, 0x00000000,  /* load.u32    t3, u0.zzzz, t3.xxxx, void */
+    0x07841009, 0x00000000, 0x00000000, 0x20390028,  /* mov         t4, void, void, u2 */
 }));
 
 struct gpu_code postlude = GPU_CODE(((uint32_t[]){
@@ -288,7 +286,7 @@ struct op_test op_tests[] = {
 #endif
 };
 
-int perform_test(struct drm_test_info *info, struct op_test *cur_test)
+int perform_test(struct drm_test_info *info, struct op_test *cur_test, int repeats)
 {
     int retval = -1;
     const size_t unit_size = 16; /* vec4 of any 32-bit type */
@@ -319,7 +317,7 @@ int perform_test(struct drm_test_info *info, struct op_test *cur_test)
         fprintf(stderr, "Unable to allocate buffer\n");
         goto out;
     }
-    for (int num_tries=0; num_tries<100 && !errors; ++num_tries) {
+    for (int num_tries=0; num_tries<repeats && !errors; ++num_tries) {
         seedx = rand();
         seedy = rand();
         cur_test->generate_values_h(seedx, a_cpu, width);
@@ -387,7 +385,7 @@ int main(int argc, char *argv[])
     }
     for (unsigned t=0; t<ARRAY_SIZE(op_tests); ++t)
     {
-        perform_test(info, &op_tests[t]);
+        perform_test(info, &op_tests[t], 100);
     }
 
     drm_test_teardown(info);
