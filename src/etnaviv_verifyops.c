@@ -140,7 +140,10 @@ void i32_generate_values_h(size_t seed, void *a, size_t width)
 {
     uint32_t base = seed * width;
     for (size_t x=0; x<width; ++x) {
-        ((uint32_t*)a)[x*4] = base + x;
+        ((uint32_t*)a)[x*4+0] = base + x;
+        ((uint32_t*)a)[x*4+1] = 0x51515151; /* fill other vector elements with recognizable random pattern */
+        ((uint32_t*)a)[x*4+2] = 0x15151515;
+        ((uint32_t*)a)[x*4+3] = 0x36363636;
     }
 }
 
@@ -148,22 +151,26 @@ void i32_generate_values_v(size_t seed, void *b, size_t height)
 {
     uint32_t base = seed * height;
     for (size_t y=0; y<height; ++y) {
-        ((uint32_t*)b)[y*4] = base + y;
+        ((uint32_t*)b)[y*4+0] = base + y;
+        ((uint32_t*)b)[y*4+1] = 0x82828282; /* fill other vector elements with recognizable random pattern */
+        ((uint32_t*)b)[y*4+2] = 0x48484848;
+        ((uint32_t*)b)[y*4+3] = 0x27272727;
     }
 }
 
-/** Scalar computations */
 #define A (a[x*4])
 #define B (b[y*4])
+/* Scalar computations broadcasted to all channels */
 #define CPU_COMPUTE_FUNC1(_name, _type, _expr) \
     static void _name(_type *out, const _type *a, const _type *b, size_t width, size_t height) \
     { \
         for(size_t y=0; y<height; ++y) { \
             for(size_t x=0; x<width; ++x) { \
-                out[(y*width+x)*4] = (_expr); \
+                out[(y*width+x)*4+0] = out[(y*width+x)*4+1] = out[(y*width+x)*4+2] = out[(y*width+x)*4+3] = (_expr); \
             } \
         } \
     }
+/* Independent expressions for channels */
 #define CPU_COMPUTE_FUNC4(_name, _type, _expr0, _expr1, _expr2, _expr3) \
     static void _name(_type *out, const _type *a, const _type *b, size_t width, size_t height) \
     { \
@@ -202,47 +209,56 @@ struct op_test op_tests[] = {
             0x00000000, 0x00000000, 0x00000000, 0x00000000, /* nop */
         }))
     },
+    /* Add will only output one element at a time */
     {"add.u32", 1, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)addu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x00841001, 0x00202800, 0x80000000, 0x00000038, /* add.u32       t4, t2, void, t3 */
         }))
     },
-    {"imullo0.u32", 1, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)mulu32_compute_cpu,
+    {"add4.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)addu32_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x00841001, 0x00202800, 0x80000000, 0x00000038, /* add.u32	t4.x___, t2.xxxx, void, t3.xxxx */
+            0x01041001, 0x00202800, 0x80000000, 0x00000038, /* add.u32	t4._y__, t2.xxxx, void, t3.xxxx */
+            0x02041001, 0x00202800, 0x80000000, 0x00000038, /* add.u32	t4.__z_, t2.xxxx, void, t3.xxxx */
+            0x04041001, 0x00202800, 0x80000000, 0x00000038, /* add.u32	t4.___w, t2.xxxx, void, t3.xxxx */
+        }))
+    },
+    {"imullo0.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)mulu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784103c, 0x39202800, 0x81c801c0, 0x00000000, /* imullo0.u32   t4, t2, t3, void */
         }))
     },
-    {"lshift.u32", 1, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)lshiftu32_compute_cpu,
+    {"lshift.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)lshiftu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x07841019, 0x39202800, 0x80010000, 0x00390038, /* lshift.u32    t4, t2, void, t3 */
         }))
     },
-    {"rshift.u32", 1, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)rshiftu32_compute_cpu,
+    {"rshift.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)rshiftu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101a, 0x39202800, 0x80010000, 0x00390038, /* rshift.u32    t4, t2, void, t3 */
         }))
     },
-    {"rotate.u32", 1, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)rotateu32_compute_cpu,
+    {"rotate.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)rotateu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101b, 0x39202800, 0x80010000, 0x00390038, /* rotate.u32    t4, t2, void, t3 */
         }))
     },
-    {"or.u32", 1, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)oru32_compute_cpu,
+    {"or.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)oru32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101c, 0x39202800, 0x80010000, 0x00390038, /* or.u32        t4, t2, void, t3 */
         }))
     },
-    {"and.u32", 1, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)andu32_compute_cpu,
+    {"and.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)andu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101d, 0x39202800, 0x80010000, 0x00390038, /* and.u32       t4, t2, void, t3 */
         }))
     },
-    {"xor.u32", 1, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)xoru32_compute_cpu,
+    {"xor.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)xoru32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101e, 0x39202800, 0x80010000, 0x00390038, /* xor.u32       t4, t2, void, t3 */
         }))
     },
-    {"not.u32", 1, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)notu32_compute_cpu,
+    {"not.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)notu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101f, 0x00200000, 0x80010000, 0x00390028, /* not.u32       t4, void, void, t2 */
         }))
