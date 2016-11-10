@@ -46,6 +46,7 @@ struct op_test {
     void (*generate_values_v)(size_t seed, void *b, size_t height);
     void (*compute_cpu)(void *out, const void *a, const void *b, size_t width, size_t height);
     struct gpu_code gpu_code;
+    uint32_t auxin[4];
 };
 
 struct gpu_code prelude = GPU_CODE(((uint32_t[]){
@@ -66,7 +67,7 @@ struct gpu_code postlude = GPU_CODE(((uint32_t[]){
 static const char *COMPS = "xyzw";
 
 #define MAX_INST 1024
-static void gen_cmd_stream(struct etna_cmd_stream *stream, struct gpu_code *gpu_code, struct etna_bo *out, struct etna_bo *in0, struct etna_bo *in1)
+static void gen_cmd_stream(struct etna_cmd_stream *stream, struct gpu_code *gpu_code, struct etna_bo *out, struct etna_bo *in0, struct etna_bo *in1, uint32_t *auxin)
 {
     unsigned num_inst;
     uint32_t code[MAX_INST*4];
@@ -96,6 +97,10 @@ static void gen_cmd_stream(struct etna_cmd_stream *stream, struct gpu_code *gpu_
     etna_set_state(stream, VIVS_VS_UNIFORMS(9), 0x55555555); /* u2.y */
     etna_set_state(stream, VIVS_VS_UNIFORMS(10), 0xaaaaaaaa); /* u2.z */
     etna_set_state(stream, VIVS_VS_UNIFORMS(11), 0x55555555); /* u2.w */
+    etna_set_state(stream, VIVS_VS_UNIFORMS(12), auxin[0]); /* u3.x Ancillary input for testing three-operand instructions */
+    etna_set_state(stream, VIVS_VS_UNIFORMS(13), auxin[1]); /* u3.y */
+    etna_set_state(stream, VIVS_VS_UNIFORMS(14), auxin[2]); /* u3.z */
+    etna_set_state(stream, VIVS_VS_UNIFORMS(15), auxin[3]); /* u3.w */
 
     for (unsigned i=0; i<code_ptr; ++i)
         etna_set_state(stream, VIVS_SH_INST_MEM(i), code[i]);
@@ -187,6 +192,7 @@ CPU_COMPUTE_FUNC4(nop_compute_cpu, uint32_t, 0xaaaaaaaa, 0x55555555, 0xaaaaaaaa,
 CPU_COMPUTE_FUNC1(addu32_compute_cpu, uint32_t, A + B);
 CPU_COMPUTE_FUNC1(mulu32_compute_cpu, uint32_t, A * B);
 CPU_COMPUTE_FUNC1(mulhu32_compute_cpu, uint32_t, ((uint64_t)A * (uint64_t)B)>>32);
+CPU_COMPUTE_FUNC1(madu32_compute_cpu, uint32_t, A * B + 0x12345678);
 CPU_COMPUTE_FUNC1(lshiftu32_compute_cpu, uint32_t, A << (B&31));
 CPU_COMPUTE_FUNC1(rshiftu32_compute_cpu, uint32_t, A >> (B&31));
 CPU_COMPUTE_FUNC1(rotateu32_compute_cpu, uint32_t, (A << (B&31)) | (A >> ((32-B)&31)));
@@ -203,7 +209,9 @@ CPU_COMPUTE_FUNC1(mulf32_compute_cpu, float, A * B);
 #undef B
 #undef CPU_COMPUTE
 
-/* Tests GPU code must take from a[x] t2 and b[y] t3, and output to t4 */
+/* Tests GPU code must take from a[x] t2 and b[y] t3, and output to t4.
+ * It can also take an ancillary argument in u3, taken from auxin.
+ */
 struct op_test op_tests[] = {
     {"nop", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)nop_compute_cpu,
         GPU_CODE(((uint32_t[]){
@@ -233,6 +241,12 @@ struct op_test op_tests[] = {
         GPU_CODE(((uint32_t[]){
             0x07841000, 0x39202800, 0x81c901c0, 0x00000000, /* imulhi0.u32   t4, t2, t3, void */
         }))
+    },
+    {"imadlo0.u32", 4, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)madu32_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x0784100c, 0x39202800, 0x81c901c0, 0x20390038, /* imadlo0.u32   t4, t2, t3, u3 */
+        })),
+        {0x12345678, 0x0, 0x0, 0x0}
     },
     {"lshift.u32", 4, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)lshiftu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
@@ -329,7 +343,7 @@ int perform_test(struct drm_test_info *info, struct op_test *cur_test, int repea
         memcpy(etna_bo_map(bo_in1), b_cpu, in1_size);
 
         /* generate command sequence */
-        gen_cmd_stream(info->stream, &cur_test->gpu_code, bo_out, bo_in0, bo_in1);
+        gen_cmd_stream(info->stream, &cur_test->gpu_code, bo_out, bo_in0, bo_in1, cur_test->auxin);
         /* execute command sequence */
         etna_cmd_stream_finish(info->stream);
 
