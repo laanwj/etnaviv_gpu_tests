@@ -54,7 +54,7 @@ struct gpu_code prelude = GPU_CODE(((uint32_t[]){
     0x00831019, 0x15600800, 0x80010000, 0x203fc008,  /* lshift.u32  t3.x___, t0.yyyy, void, u0.wwww */
     0x07811032, 0x2aa00800, 0x800001d0, 0x00000000,  /* load.u32    t1, u0.zzzz, t3.xxxx, void */
     0x07831009, 0x00000000, 0x00000000, 0x00390018,  /* mov t3, void, void, t1 */
-    0x07841009, 0x00000000, 0x00000000, 0x20000028,  /* mov t4, void, void, u2.xxxx */
+    0x07841009, 0x00000000, 0x00000000, 0x20390028,  /* mov t4, void, void, u2 */
 }));
 
 struct gpu_code postlude = GPU_CODE(((uint32_t[]){
@@ -63,6 +63,8 @@ struct gpu_code postlude = GPU_CODE(((uint32_t[]){
     0x07800033, 0x00200800, 0x80000050, 0x00390048,  /* store.u32   mem.xyzw, u0.xxxx, t0.xxxx, t4 */
     0x00000000, 0x00000000, 0x00000000, 0x00000000,  /* nop void, void, void, void */
 }));
+
+static const char *COMPS = "xyzw";
 
 #define MAX_INST 1024
 static void gen_cmd_stream(struct etna_cmd_stream *stream, struct gpu_code *gpu_code, struct etna_bo *out, struct etna_bo *in0, struct etna_bo *in1)
@@ -162,6 +164,19 @@ void i32_generate_values_v(size_t seed, void *b, size_t height)
             } \
         } \
     }
+#define CPU_COMPUTE_FUNC4(_name, _type, _expr0, _expr1, _expr2, _expr3) \
+    static void _name(_type *out, const _type *a, const _type *b, size_t width, size_t height) \
+    { \
+        for(size_t y=0; y<height; ++y) { \
+            for(size_t x=0; x<width; ++x) { \
+                out[(y*width+x)*4+0] = (_expr0); \
+                out[(y*width+x)*4+1] = (_expr1); \
+                out[(y*width+x)*4+2] = (_expr2); \
+                out[(y*width+x)*4+3] = (_expr3); \
+            } \
+        } \
+    }
+CPU_COMPUTE_FUNC4(nop_compute_cpu, uint32_t, 0xaaaaaaaa, 0x55555555, 0xaaaaaaaa, 0x55555555);
 /* u32 */
 CPU_COMPUTE_FUNC1(addu32_compute_cpu, uint32_t, A + B);
 CPU_COMPUTE_FUNC1(mulu32_compute_cpu, uint32_t, A * B);
@@ -182,6 +197,11 @@ CPU_COMPUTE_FUNC1(mulf32_compute_cpu, float, A * B);
 
 /* Tests GPU code must take from a[x] t2 and b[y] t3, and output to t4 */
 struct op_test op_tests[] = {
+    {"nop", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)nop_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x00000000, 0x00000000, 0x00000000, 0x00000000, /* nop */
+        }))
+    },
     {"add.u32", 1, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)addu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x00841001, 0x00202800, 0x80000000, 0x00000038, /* add.u32       t4, t2, void, t3 */
@@ -288,15 +308,19 @@ int perform_test(struct drm_test_info *info, struct op_test *cur_test)
 
         /* verify result */
         const uint32_t *out_gpu = etna_bo_map(bo_out);
-        if (cur_test->elements_out == 1 && cur_test->compare_type == CT_INT32) {
+        if (cur_test->compare_type == CT_INT32) {
             for(size_t y=0; y<height; ++y) {
                 for(size_t x=0; x<width; ++x) {
-                    uint32_t expected = ((uint32_t*)out_cpu)[(y*width+x)*4];
-                    uint32_t found = ((uint32_t*)out_gpu)[(y*width+x)*4];
-                    if (expected != found) {
-                        if (errors < 10)
-                            printf("Mismatch %s(%08x,%08x) -> %08x, expected %08x\n", cur_test->op_name, ((uint32_t*)a_cpu)[x*4], ((uint32_t*)b_cpu)[y*4], found, expected);
-                        errors += 1;
+                    for(size_t c=0; c<cur_test->elements_out; ++c) {
+                        uint32_t expected = ((uint32_t*)out_cpu)[(y*width+x)*4 + c];
+                        uint32_t found = ((uint32_t*)out_gpu)[(y*width+x)*4 + c];
+                        if (expected != found) {
+                            if (errors < 10)
+                                printf("Mismatch %s(%08x,%08x).%c -> %08x, expected %08x\n", cur_test->op_name,
+                                        ((uint32_t*)a_cpu)[x*4 + c], ((uint32_t*)b_cpu)[y*4 + c],
+                                        COMPS[c], found, expected);
+                            errors += 1;
+                        }
                     }
                 }
             }
