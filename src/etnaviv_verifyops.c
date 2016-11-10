@@ -3,7 +3,7 @@
  * Distributed under the MIT software license, see the accompanying
  * file COPYING or http://www.opensource.org/licenses/mit-license.php.
  */
-/* Verify 2-input operation */
+/* Verify ALU operations */
 #ifdef HAVE_CONFIG_H
 #  include "config.h"
 #endif
@@ -57,7 +57,7 @@ struct gpu_code prelude = GPU_CODE(((uint32_t[]){
 }));
 
 struct gpu_code postlude = GPU_CODE(((uint32_t[]){
-    0x0080100c, 0x15600800, 0x800100c0, 0x0000000a,  /* 0x4c.u32    t0.x___, t0.yyyy, u1.xxxx, t0.xxxx */
+    0x0080100c, 0x15600800, 0x800100c0, 0x0000000a,  /* imadlo0.u32 t0.x___, t0.yyyy, u1.xxxx, t0.xxxx */
     0x00801019, 0x00200800, 0x80010000, 0x203fc008,  /* lshift.u32  t0.x___, t0.xxxx, void, u0.wwww */
     0x07800033, 0x00200800, 0x80000050, 0x00390048,  /* store.u32   mem.xyzw, u0.xxxx, t0.xxxx, t4 */
     0x00000000, 0x00000000, 0x00000000, 0x00000000,  /* nop void, void, void, void */
@@ -84,18 +84,18 @@ static void gen_cmd_stream(struct etna_cmd_stream *stream, struct gpu_code *gpu_
     etna_set_state(stream, VIVS_PA_SYSTEM_MODE, VIVS_PA_SYSTEM_MODE_UNK0 | VIVS_PA_SYSTEM_MODE_UNK4);
     etna_set_state(stream, VIVS_GL_API_MODE, VIVS_GL_API_MODE_OPENCL);
 
-    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(0), out);
-    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(1), in0);
-    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(2), in1);
-    etna_set_state(stream, VIVS_VS_UNIFORMS(3), 0x4); /* Left-shift */
-    etna_set_state(stream, VIVS_VS_UNIFORMS(4), 0x10);
-    etna_set_state(stream, VIVS_VS_UNIFORMS(5), 0x10);
-    etna_set_state(stream, VIVS_VS_UNIFORMS(6), 0x0);
-    etna_set_state(stream, VIVS_VS_UNIFORMS(7), 0x0);
-    etna_set_state(stream, VIVS_VS_UNIFORMS(8), 0xaaaaaaaa); /* Default output (if GPU program generates no output in t4) */
-    etna_set_state(stream, VIVS_VS_UNIFORMS(9), 0x55555555);
-    etna_set_state(stream, VIVS_VS_UNIFORMS(10), 0xaaaaaaaa);
-    etna_set_state(stream, VIVS_VS_UNIFORMS(11), 0x55555555);
+    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(0), out); /* u0.x */
+    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(1), in0); /* u0.y */
+    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(2), in1); /* u0.z */
+    etna_set_state(stream, VIVS_VS_UNIFORMS(3), 0x4);  /* u0.w Left-shift */
+    etna_set_state(stream, VIVS_VS_UNIFORMS(4), 0x10); /* u1.x Row stride */
+    etna_set_state(stream, VIVS_VS_UNIFORMS(5), 0x0);  /* u1.y Unused */
+    etna_set_state(stream, VIVS_VS_UNIFORMS(6), 0x0);  /* u1.z Unused */
+    etna_set_state(stream, VIVS_VS_UNIFORMS(7), 0x0);  /* u1.w Unused */
+    etna_set_state(stream, VIVS_VS_UNIFORMS(8), 0xaaaaaaaa); /* u2.x Default output (if GPU program generates no output in t4) */
+    etna_set_state(stream, VIVS_VS_UNIFORMS(9), 0x55555555); /* u2.y */
+    etna_set_state(stream, VIVS_VS_UNIFORMS(10), 0xaaaaaaaa); /* u2.z */
+    etna_set_state(stream, VIVS_VS_UNIFORMS(11), 0x55555555); /* u2.w */
 
     for (unsigned i=0; i<code_ptr; ++i)
         etna_set_state(stream, VIVS_SH_INST_MEM(i), code[i]);
