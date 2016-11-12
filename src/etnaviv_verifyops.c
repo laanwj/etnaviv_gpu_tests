@@ -13,6 +13,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <assert.h>
 #include <math.h>
 #include <time.h>
@@ -34,7 +35,8 @@ struct gpu_code {
 enum compare_type {
     CT_INT32,
     CT_INT32_BCAST,
-    CT_FLOAT32
+    CT_FLOAT32,
+    CT_FLOAT32_BCAST
 };
 
 struct op_test {
@@ -290,15 +292,48 @@ struct op_test op_tests[] = {
     },
     // add.u16 does nothing
     // 0x00801001, 0x15402800, 0xc0000000, 0x00000018, /* add.u16       t0.x___, t2.yyyy, void, t1.xxxx */
-#if 0
     // Need an effective way of comparing these
-    {"add.f32", 4, CT_FLOAT32, i32_generate_values_h, i32_generate_values_v, (void*)addf32_compute_cpu,
+    {"add.f32", 1, CT_FLOAT32, i32_generate_values_h, i32_generate_values_v, (void*)addf32_compute_cpu,
         GPU_CODE(((uint32_t[]){
-            0x00801001, 0x15402800, 0x00000000, 0x00000018, /* add.f32       t0.x___, t2.yyyy, void, t1.xxxx */
+            0x07841001, 0x39002800, 0x00000000, 0x00390038, /* add           t4, t2, void, t3 */
         }))
     },
-#endif
 };
+
+/* Compare 32-bit floating point values.
+ * These are passed as integers to have more control over the comparison process.
+ */
+bool compare_float(uint32_t a, uint32_t b)
+{
+    if (abs(a-b) < 10) // Allow slightly different approximations
+        return true;
+    int a_sign = a>>31;
+    int a_exponent = (a >> 23) & 0xff;
+    int a_mantissa = a & 0x7fffff;
+    int b_sign = b>>31;
+    int b_exponent = (b >> 23) & 0xff;
+    int b_mantissa = b & 0x7fffff;
+
+    // allow large differences for really small values
+    // these tend to be off or even clipped to 0
+    if (a_exponent < 22 && b_exponent < 22)
+        return abs(a_exponent-b_exponent) <= 1;
+
+    // handle special values
+    if (a_exponent == 0xff && b_exponent == 0xff) {
+        if (a_mantissa == 0 && b_mantissa == 0) { // +Inf, -Inf
+            return a_sign == b_sign;
+        } else if (a_mantissa != 0 && b_mantissa != 0) { // NaN
+            return true;
+        }
+    }
+
+    if (a_exponent == 0x00 && b_exponent == 0x00) {
+        // denormalized - just return true if same sign
+        return a_sign == b_sign;
+    }
+    return false;
+}
 
 int perform_test(struct drm_test_info *info, struct op_test *cur_test, int repeats)
 {
@@ -361,6 +396,23 @@ int perform_test(struct drm_test_info *info, struct op_test *cur_test, int repea
                                 printf("Mismatch %s(%08x,%08x).%c -> %08x, expected %08x\n", cur_test->op_name,
                                         ((uint32_t*)a_cpu)[x*4 + sc], ((uint32_t*)b_cpu)[y*4 + sc],
                                         COMPS[c], found, expected);
+                            errors += 1;
+                        }
+                    }
+                }
+            }
+        } else if (cur_test->compare_type == CT_FLOAT32 || cur_test->compare_type == CT_FLOAT32_BCAST) {
+            for(size_t y=0; y<height; ++y) {
+                for(size_t x=0; x<width; ++x) {
+                    for(size_t c=0; c<cur_test->elements_out; ++c) {
+                        uint32_t expected = ((uint32_t*)out_cpu)[(y*width+x)*4 + c];
+                        uint32_t found = ((uint32_t*)out_gpu)[(y*width+x)*4 + c];
+                        if (!compare_float(expected, found)) {
+                            int sc = cur_test->compare_type == CT_FLOAT32_BCAST ? 0 : c; /* source component */
+                            if (errors < 10)
+                                printf("Mismatch %s(%08x,%08x).%c -> %08x (%e), expected %08x (%e)\n", cur_test->op_name,
+                                        ((uint32_t*)a_cpu)[x*4 + sc], ((uint32_t*)b_cpu)[y*4 + sc],
+                                        COMPS[c], found, *(float*)&found, expected, *(float*)&expected);
                             errors += 1;
                         }
                     }
