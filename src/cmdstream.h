@@ -24,15 +24,16 @@ static inline void etna_set_state(struct etna_cmd_stream *stream, uint32_t addre
     etna_cmd_stream_emit(stream, value);
 }
 
+/* reloc_flags must be combo of ETNA_RELOC_WRITE, ETNA_RELOC_READ */
 static inline void etna_set_state_from_bo(struct etna_cmd_stream *stream,
-        uint32_t address, struct etna_bo *bo)
+        uint32_t address, struct etna_bo *bo, uint32_t reloc_flags)
 {
     etna_cmd_stream_reserve(stream, 2);
     etna_emit_load_state(stream, address >> 2, 1);
 
     etna_cmd_stream_reloc(stream, &(struct etna_reloc){
         .bo = bo,
-        .flags = ETNA_RELOC_WRITE,
+        .flags = reloc_flags,
         .offset = 0,
     });
 }

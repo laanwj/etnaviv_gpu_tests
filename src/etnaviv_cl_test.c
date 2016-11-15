@@ -32,7 +32,7 @@ static void gen_cmd_stream(struct etna_cmd_stream *stream, struct etna_bo *bmp)
     etna_set_state(stream, VIVS_VS_OUTPUT_COUNT, 0);
     etna_set_state(stream, VIVS_CL_UNK00924, 0x0);
 
-    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(0), bmp);
+    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(0), bmp, ETNA_RELOC_WRITE);
 
     etna_stall(stream, SYNC_RECIPIENT_FE, SYNC_RECIPIENT_PE);
 

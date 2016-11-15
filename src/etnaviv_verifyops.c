@@ -92,9 +92,9 @@ static void gen_cmd_stream(struct etna_cmd_stream *stream, struct gpu_code *gpu_
     etna_set_state(stream, VIVS_VS_INPUT_COUNT, VIVS_VS_INPUT_COUNT_COUNT(1) | VIVS_VS_INPUT_COUNT_UNK8(31));
     etna_set_state(stream, VIVS_VS_INPUT(0), VIVS_VS_INPUT_I0(0) | VIVS_VS_INPUT_I1(1) | VIVS_VS_INPUT_I2(2) | VIVS_VS_INPUT_I3(3));
 
-    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(0), out); /* u0.x */
-    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(1), in0); /* u0.y */
-    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(2), in1); /* u0.z */
+    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(0), out, ETNA_RELOC_WRITE); /* u0.x */
+    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(1), in0, ETNA_RELOC_READ); /* u0.y */
+    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(2), in1, ETNA_RELOC_READ); /* u0.z */
     etna_set_state(stream, VIVS_VS_UNIFORMS(3), 0x4);  /* u0.w Left-shift */
     etna_set_state(stream, VIVS_VS_UNIFORMS(4), 0x10); /* u1.x Row stride */
     etna_set_state(stream, VIVS_VS_UNIFORMS(5), 0x0);  /* u1.y Unused */
