@@ -4,6 +4,7 @@
 #include <etnaviv_drmif.h>
 
 #include "cmdstream.xml.h"
+#include "state.xml.h"
 
 static inline void etna_emit_load_state(struct etna_cmd_stream *stream,
         const uint16_t offset, const uint16_t count)
@@ -34,6 +35,15 @@ static inline void etna_set_state_from_bo(struct etna_cmd_stream *stream,
         .flags = ETNA_RELOC_WRITE,
         .offset = 0,
     });
+}
+
+static inline void etna_stall(struct etna_cmd_stream *stream, uint32_t from, uint32_t to)
+{
+   etna_cmd_stream_reserve(stream, 4);
+   etna_emit_load_state(stream, VIVS_GL_SEMAPHORE_TOKEN >> 2, 1);
+   etna_cmd_stream_emit(stream, VIVS_GL_SEMAPHORE_TOKEN_FROM(from) | VIVS_GL_SEMAPHORE_TOKEN_TO(to));
+   etna_cmd_stream_emit(stream, VIV_FE_STALL_HEADER_OP_STALL);
+   etna_cmd_stream_emit(stream, VIV_FE_STALL_TOKEN_FROM(from) | VIV_FE_STALL_TOKEN_TO(to));
 }
 
 #endif

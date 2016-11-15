@@ -34,7 +34,8 @@ static void gen_cmd_stream(struct etna_cmd_stream *stream, struct etna_bo *bmp)
 
     etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(0), bmp);
 
-    etna_set_state(stream, VIVS_GL_SEMAPHORE_TOKEN, VIVS_GL_SEMAPHORE_TOKEN_FROM(SYNC_RECIPIENT_FE) | VIVS_GL_SEMAPHORE_TOKEN_TO(SYNC_RECIPIENT_PE));
+    etna_stall(stream, SYNC_RECIPIENT_FE, SYNC_RECIPIENT_PE);
+
     etna_set_state(stream, VIVS_VS_INPUT_COUNT, VIVS_VS_INPUT_COUNT_COUNT(1) | VIVS_VS_INPUT_COUNT_UNK8(1));
     etna_set_state(stream, VIVS_VS_TEMP_REGISTER_CONTROL, VIVS_VS_TEMP_REGISTER_CONTROL_NUM_TEMPS(10));
     etna_set_state(stream, VIVS_VS_OUTPUT(0), VIVS_VS_OUTPUT_O0(0) | VIVS_VS_OUTPUT_O1(0) | VIVS_VS_OUTPUT_O2(0) | VIVS_VS_OUTPUT_O3(0));
@@ -159,7 +160,7 @@ static void gen_cmd_stream(struct etna_cmd_stream *stream, struct etna_bo *bmp)
     etna_set_state(stream, VIVS_CL_THREAD_ALLOCATION, 0x1);
     etna_set_state(stream, VIVS_CL_KICKER, 0xbadabeeb);
     etna_set_state(stream, VIVS_GL_FLUSH_CACHE, VIVS_GL_FLUSH_CACHE_TEXTURE | VIVS_GL_FLUSH_CACHE_SHADER_L1);
-    etna_set_state(stream, VIVS_GL_SEMAPHORE_TOKEN, VIVS_GL_SEMAPHORE_TOKEN_FROM(SYNC_RECIPIENT_FE) | VIVS_GL_SEMAPHORE_TOKEN_TO(SYNC_RECIPIENT_PE));
+    etna_stall(stream, SYNC_RECIPIENT_FE, SYNC_RECIPIENT_PE);
     etna_set_state(stream, VIVS_GL_FLUSH_CACHE, VIVS_GL_FLUSH_CACHE_DEPTH | VIVS_GL_FLUSH_CACHE_COLOR);
 }
 
