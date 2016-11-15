@@ -86,6 +86,11 @@ static void gen_cmd_stream(struct etna_cmd_stream *stream, struct gpu_code *gpu_
 
     etna_set_state(stream, VIVS_PA_SYSTEM_MODE, VIVS_PA_SYSTEM_MODE_UNK0 | VIVS_PA_SYSTEM_MODE_UNK4);
     etna_set_state(stream, VIVS_GL_API_MODE, VIVS_GL_API_MODE_OPENCL);
+    /* Need to write *something* to VS input registers before writing shader uniforms and code. Otherwise
+     * the whole thing will hang when running this first after boot.
+     */
+    etna_set_state(stream, VIVS_VS_INPUT_COUNT, VIVS_VS_INPUT_COUNT_COUNT(1) | VIVS_VS_INPUT_COUNT_UNK8(31));
+    etna_set_state(stream, VIVS_VS_INPUT(0), VIVS_VS_INPUT_I0(0) | VIVS_VS_INPUT_I1(1) | VIVS_VS_INPUT_I2(2) | VIVS_VS_INPUT_I3(3));
 
     etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(0), out); /* u0.x */
     etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(1), in0); /* u0.y */
