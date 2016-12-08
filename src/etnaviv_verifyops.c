@@ -41,7 +41,6 @@ enum compare_type {
 
 struct op_test {
     const char *op_name;
-    size_t elements_out;
     enum compare_type compare_type;
     void (*generate_values_h)(size_t seed, void *a, size_t width);
     // Leave NULL for unary ops
@@ -327,18 +326,18 @@ CPU_COMPUTE_FUNC1_MULTI(mulf32_compute_cpu, float, AI(i) * BI(i));
  * It can also take an ancillary argument in u3, taken from auxin.
  */
 struct op_test op_tests[] = {
-    {"nop", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)nop_compute_cpu,
+    {"nop", CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)nop_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x00000000, 0x00000000, 0x00000000, 0x00000000, /* nop */
         }))
     },
     /* Add will only output one element at a time */
-    {"add.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)addu32_single_compute_cpu,
+    {"add.u32", CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)addu32_single_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x00841001, 0x00202800, 0x80000000, 0x00000038, /* add.u32       t4, t2, void, t3 */
         }))
     },
-    {"add4.u32", 4, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)addu32_compute_cpu,
+    {"add4.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)addu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x00841001, 0x00202800, 0x80000000, 0x00000038, /* add.u32       t4.x___, t2.xxxx, void, t3.xxxx */
             0x01041001, 0x00202800, 0x80000000, 0x00000038, /* add.u32       t4._y__, t2.xxxx, void, t3.xxxx */
@@ -346,58 +345,58 @@ struct op_test op_tests[] = {
             0x04041001, 0x00202800, 0x80000000, 0x00000038, /* add.u32       t4.___w, t2.xxxx, void, t3.xxxx */
         }))
     },
-    {"imullo0.u32", 4, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)mulu32_compute_cpu,
+    {"imullo0.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)mulu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784103c, 0x39202800, 0x81c801c0, 0x00000000, /* imullo0.u32   t4, t2, t3, void */
         }))
     },
-    {"imulhi0.u32", 4, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)mulhu32_compute_cpu,
+    {"imulhi0.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)mulhu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x07841000, 0x39202800, 0x81c901c0, 0x00000000, /* imulhi0.u32   t4, t2, t3, void */
         }))
     },
-    {"imadlo0.u32", 4, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)madu32_compute_cpu,
+    {"imadlo0.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)madu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784100c, 0x39202800, 0x81c901c0, 0x20390038, /* imadlo0.u32   t4, t2, t3, u3 */
         })),
         {0x12345678, 0x0, 0x0, 0x0}
     },
-    {"lshift.u32", 4, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)lshiftu32_compute_cpu,
+    {"lshift.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)lshiftu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x07841019, 0x39202800, 0x80010000, 0x00390038, /* lshift.u32    t4, t2, void, t3 */
         }))
     },
-    {"rshift.u32", 4, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)rshiftu32_compute_cpu,
+    {"rshift.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)rshiftu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101a, 0x39202800, 0x80010000, 0x00390038, /* rshift.u32    t4, t2, void, t3 */
         }))
     },
-    {"rotate.u32", 4, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)rotateu32_compute_cpu,
+    {"rotate.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)rotateu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101b, 0x39202800, 0x80010000, 0x00390038, /* rotate.u32    t4, t2, void, t3 */
         }))
     },
-    {"or.u32", 4, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)oru32_compute_cpu,
+    {"or.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)oru32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101c, 0x39202800, 0x80010000, 0x00390038, /* or.u32        t4, t2, void, t3 */
         }))
     },
-    {"and.u32", 4, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)andu32_compute_cpu,
+    {"and.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)andu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101d, 0x39202800, 0x80010000, 0x00390038, /* and.u32       t4, t2, void, t3 */
         }))
     },
-    {"xor.u32", 4, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)xoru32_compute_cpu,
+    {"xor.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)xoru32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101e, 0x39202800, 0x80010000, 0x00390038, /* xor.u32       t4, t2, void, t3 */
         }))
     },
-    {"not.u32", 4, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)notu32_compute_cpu,
+    {"not.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)notu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101f, 0x00200000, 0x80010000, 0x00390028, /* not.u32       t4, void, void, t2 */
         }))
     },
-    {"leadzero.u32", 4, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)leadzerou32_compute_cpu,
+    {"leadzero.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)leadzerou32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x07841018, 0x00200000, 0x80010000, 0x00390028, /* leadzero.u32  t4, void, void, t2 */
         }))
@@ -405,7 +404,7 @@ struct op_test op_tests[] = {
     // add.u16 does nothing
     // 0x00801001, 0x15402800, 0xc0000000, 0x00000018, /* add.u16       t0.x___, t2.yyyy, void, t1.xxxx */
     // Need an effective way of comparing these
-    {"add.f32", 4, CT_FLOAT32, i32_generate_values_h4, i32_generate_values_v4, (void*)addf32_compute_cpu,
+    {"add.f32", CT_FLOAT32, i32_generate_values_h4, i32_generate_values_v4, (void*)addf32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x07841001, 0x39002800, 0x00000000, 0x00390038, /* add           t4, t2, void, t3 */
         }))
@@ -501,7 +500,7 @@ int perform_test(HardwareType hwt, struct drm_test_info *info, struct op_test *c
         if (cur_test->compare_type == CT_INT32 || cur_test->compare_type == CT_INT32_BCAST) {
             for(size_t y=0; y<height; ++y) {
                 for(size_t x=0; x<width; ++x) {
-                    for(size_t c=0; c<cur_test->elements_out; ++c) {
+                    for(size_t c=0; c<4; ++c) {
                         uint32_t expected = ((uint32_t*)out_cpu)[(y*width+x)*4 + c];
                         uint32_t found = ((uint32_t*)out_gpu)[(y*width+x)*4 + c];
                         if (expected != found) {
@@ -518,7 +517,7 @@ int perform_test(HardwareType hwt, struct drm_test_info *info, struct op_test *c
         } else if (cur_test->compare_type == CT_FLOAT32 || cur_test->compare_type == CT_FLOAT32_BCAST) {
             for(size_t y=0; y<height; ++y) {
                 for(size_t x=0; x<width; ++x) {
-                    for(size_t c=0; c<cur_test->elements_out; ++c) {
+                    for(size_t c=0; c<4; ++c) {
                         uint32_t expected = ((uint32_t*)out_cpu)[(y*width+x)*4 + c];
                         uint32_t found = ((uint32_t*)out_gpu)[(y*width+x)*4 + c];
                         if (!compare_float(expected, found)) {
@@ -534,7 +533,7 @@ int perform_test(HardwareType hwt, struct drm_test_info *info, struct op_test *c
             }
         } else {
             errors = 1;
-            printf("No comparison implemented for num_elements %d compare_type %d\n", (int)cur_test->elements_out, cur_test->compare_type);
+            printf("No comparison implemented for compare_type %d\n", cur_test->compare_type);
         }
     }
     if (errors == 0) {
