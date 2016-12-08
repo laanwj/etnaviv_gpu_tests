@@ -211,6 +211,17 @@ void i32_generate_values_h(size_t seed, void *a, size_t width)
     }
 }
 
+void i32_generate_values_h4(size_t seed, void *a, size_t width)
+{
+    uint32_t base = seed * width;
+    for (size_t x=0; x<width; ++x) {
+        ((uint32_t*)a)[x*4+0] = base + x;
+        ((uint32_t*)a)[x*4+1] = base + x + 0x010000;
+        ((uint32_t*)a)[x*4+2] = base + x + 0x020000;
+        ((uint32_t*)a)[x*4+3] = base + x + 0x030000;
+    }
+}
+
 void i32_generate_values_v(size_t seed, void *b, size_t height)
 {
     uint32_t base = seed * height;
@@ -222,15 +233,43 @@ void i32_generate_values_v(size_t seed, void *b, size_t height)
     }
 }
 
+void i32_generate_values_v4(size_t seed, void *b, size_t height)
+{
+    uint32_t base = seed * height;
+    for (size_t y=0; y<height; ++y) {
+        ((uint32_t*)b)[y*4+0] = base + y;
+        ((uint32_t*)b)[y*4+1] = base + y + 0x010000;
+        ((uint32_t*)b)[y*4+2] = base + y + 0x020000;
+        ((uint32_t*)b)[y*4+3] = base + y + 0x030000;
+    }
+}
+
+/* shortcut for source value 0 */
 #define A (a[x*4])
 #define B (b[y*4])
+/* source value (component) */
+#define AI(i) (a[x*4+(i)])
+#define BI(i) (b[y*4+(i)])
 /* Scalar computations broadcasted to all channels */
-#define CPU_COMPUTE_FUNC1(_name, _type, _expr) \
+#define CPU_COMPUTE_FUNC1_BCAST(_name, _type, _expr) \
     static void _name(_type *out, const _type *a, const _type *b, size_t width, size_t height) \
     { \
         for(size_t y=0; y<height; ++y) { \
             for(size_t x=0; x<width; ++x) { \
                 out[(y*width+x)*4+0] = out[(y*width+x)*4+1] = out[(y*width+x)*4+2] = out[(y*width+x)*4+3] = (_expr); \
+            } \
+        } \
+    }
+/* Scalar computation on one channel only, rest will stay at padding pattern */
+#define CPU_COMPUTE_FUNC1_PAD(_name, _type, _expr) \
+    static void _name(_type *out, const _type *a, const _type *b, size_t width, size_t height) \
+    { \
+        for(size_t y=0; y<height; ++y) { \
+            for(size_t x=0; x<width; ++x) { \
+                out[(y*width+x)*4+0] = (_expr); \
+                out[(y*width+x)*4+1] = 0x55555555; \
+                out[(y*width+x)*4+2] = 0xaaaaaaaa; \
+                out[(y*width+x)*4+3] = 0x55555555; \
             } \
         } \
     }
@@ -249,24 +288,27 @@ void i32_generate_values_v(size_t seed, void *b, size_t height)
     }
 CPU_COMPUTE_FUNC4(nop_compute_cpu, uint32_t, 0xaaaaaaaa, 0x55555555, 0xaaaaaaaa, 0x55555555);
 /* u32 */
-CPU_COMPUTE_FUNC1(addu32_compute_cpu, uint32_t, A + B);
-CPU_COMPUTE_FUNC1(mulu32_compute_cpu, uint32_t, A * B);
-CPU_COMPUTE_FUNC1(mulhu32_compute_cpu, uint32_t, ((uint64_t)A * (uint64_t)B)>>32);
-CPU_COMPUTE_FUNC1(madu32_compute_cpu, uint32_t, A * B + 0x12345678);
-CPU_COMPUTE_FUNC1(lshiftu32_compute_cpu, uint32_t, A << (B&31));
-CPU_COMPUTE_FUNC1(rshiftu32_compute_cpu, uint32_t, A >> (B&31));
-CPU_COMPUTE_FUNC1(rotateu32_compute_cpu, uint32_t, (A << (B&31)) | (A >> ((32-B)&31)));
-CPU_COMPUTE_FUNC1(oru32_compute_cpu, uint32_t, A | B);
-CPU_COMPUTE_FUNC1(andu32_compute_cpu, uint32_t, A & B);
-CPU_COMPUTE_FUNC1(xoru32_compute_cpu, uint32_t, A ^ B);
-CPU_COMPUTE_FUNC1(notu32_compute_cpu, uint32_t, ~A);
-CPU_COMPUTE_FUNC1(leadzerou32_compute_cpu, uint32_t, (A != 0) ? __builtin_clz(A) : 0x20);
+CPU_COMPUTE_FUNC1_PAD(addu32_single_compute_cpu, uint32_t, A + B);
+CPU_COMPUTE_FUNC1_BCAST(addu32_compute_cpu, uint32_t, A + B);
+CPU_COMPUTE_FUNC1_BCAST(mulu32_compute_cpu, uint32_t, A * B);
+CPU_COMPUTE_FUNC1_BCAST(mulhu32_compute_cpu, uint32_t, ((uint64_t)A * (uint64_t)B)>>32);
+CPU_COMPUTE_FUNC1_BCAST(madu32_compute_cpu, uint32_t, A * B + 0x12345678);
+CPU_COMPUTE_FUNC1_BCAST(lshiftu32_compute_cpu, uint32_t, A << (B&31));
+CPU_COMPUTE_FUNC1_BCAST(rshiftu32_compute_cpu, uint32_t, A >> (B&31));
+CPU_COMPUTE_FUNC1_BCAST(rotateu32_compute_cpu, uint32_t, (A << (B&31)) | (A >> ((32-B)&31)));
+CPU_COMPUTE_FUNC1_BCAST(oru32_compute_cpu, uint32_t, A | B);
+CPU_COMPUTE_FUNC1_BCAST(andu32_compute_cpu, uint32_t, A & B);
+CPU_COMPUTE_FUNC1_BCAST(xoru32_compute_cpu, uint32_t, A ^ B);
+CPU_COMPUTE_FUNC1_BCAST(notu32_compute_cpu, uint32_t, ~A);
+CPU_COMPUTE_FUNC1_BCAST(leadzerou32_compute_cpu, uint32_t, (A != 0) ? __builtin_clz(A) : 0x20);
 /* float */
-CPU_COMPUTE_FUNC1(addf32_compute_cpu, float, A + B);
-CPU_COMPUTE_FUNC1(mulf32_compute_cpu, float, A * B);
+CPU_COMPUTE_FUNC4(addf32_compute_cpu, float, AI(0) + BI(0), AI(1) + BI(1), AI(2) + BI(2), AI(3) + BI(3));
+CPU_COMPUTE_FUNC4(mulf32_compute_cpu, float, AI(0) * BI(0), AI(1) * BI(1), AI(2) * BI(2), AI(3) * BI(3));
 
 #undef A
 #undef B
+#undef AI
+#undef BI
 #undef CPU_COMPUTE
 
 /* Tests GPU code must take from a[x] t2 and b[y] t3, and output to t4.
@@ -279,7 +321,7 @@ struct op_test op_tests[] = {
         }))
     },
     /* Add will only output one element at a time */
-    {"add.u32", 1, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)addu32_compute_cpu,
+    {"add.u32", 4, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)addu32_single_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x00841001, 0x00202800, 0x80000000, 0x00000038, /* add.u32       t4, t2, void, t3 */
         }))
@@ -351,7 +393,7 @@ struct op_test op_tests[] = {
     // add.u16 does nothing
     // 0x00801001, 0x15402800, 0xc0000000, 0x00000018, /* add.u16       t0.x___, t2.yyyy, void, t1.xxxx */
     // Need an effective way of comparing these
-    {"add.f32", 1, CT_FLOAT32, i32_generate_values_h, i32_generate_values_v, (void*)addf32_compute_cpu,
+    {"add.f32", 4, CT_FLOAT32, i32_generate_values_h4, i32_generate_values_v4, (void*)addf32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x07841001, 0x39002800, 0x00000000, 0x00390038, /* add           t4, t2, void, t3 */
         }))
