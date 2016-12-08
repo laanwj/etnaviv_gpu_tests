@@ -39,15 +39,15 @@ enum compare_type {
     CT_FLOAT32_BCAST
 };
 
-typedef enum {
+enum hardware_type {
     HWT_GC2000 = 1,
     HWT_GC3000 = 2,
     HWT_ALL = 3,
-} HardwareType;
+};
 
 struct op_test {
     const char *op_name;
-    HardwareType hardware_type;
+    enum hardware_type hardware_type;
     enum compare_type compare_type;
     void (*generate_values_h)(size_t seed, void *a, size_t width);
     // Leave NULL for unary ops
@@ -75,7 +75,7 @@ struct gpu_code postlude = GPU_CODE(((uint32_t[]){
 static const char *COMPS = "xyzw";
 
 #define MAX_INST 1024
-static void gen_cmd_stream(HardwareType hwt, struct etna_cmd_stream *stream, struct gpu_code *gpu_code, struct etna_bo *bo_code, struct etna_bo *out, struct etna_bo *in0, struct etna_bo *in1, uint32_t *auxin)
+static void gen_cmd_stream(enum hardware_type hwt, struct etna_cmd_stream *stream, struct gpu_code *gpu_code, struct etna_bo *bo_code, struct etna_bo *out, struct etna_bo *in0, struct etna_bo *in1, uint32_t *auxin)
 {
     unsigned num_inst;
     uint32_t code[MAX_INST*4];
@@ -501,7 +501,7 @@ bool compare_float(uint32_t a, uint32_t b)
     return false;
 }
 
-int perform_test(HardwareType hwt, struct drm_test_info *info, struct op_test *cur_test, int repeats)
+int perform_test(enum hardware_type hwt, struct drm_test_info *info, struct op_test *cur_test, int repeats)
 {
     int retval = -1;
     const size_t unit_size = 16; /* vec4 of any 32-bit type */
@@ -615,32 +615,33 @@ int main(int argc, char *argv[])
     srand(time(NULL));
     struct drm_test_info *info;
     uint64_t val;
-    HardwareType hwt = HWT_GC2000;
+    enum hardware_type hwt = HWT_GC2000;
     if ((info = drm_test_setup(argc, argv)) == NULL) {
         return 1;
     }
     if (etna_gpu_get_param(info->gpu, ETNA_GPU_MODEL, &val)) {
         fprintf(stderr, "Could not get GPU model\n");
-        return 1;
+        goto error;
     }
     switch (val) {
     case 0x2000: printf("  Model: GC2000\n"); hwt = HWT_GC2000; break;
     case 0x3000: printf("  Model: GC3000\n"); hwt = HWT_GC3000; break;
     default:
         fprintf(stderr, "Do not know how to handle GPU model %08x\n", (uint32_t)val);
-        return 1;
+        goto error;
     }
     for (unsigned t=0; t<ARRAY_SIZE(op_tests); ++t)
     {
         if (op_tests[t].hardware_type & hwt) {
             perform_test(hwt, info, &op_tests[t], 100);
         } else {
-            printf("%s (skipped)\n", op_tests[t].op_name);
+            printf("%s: (skipped)\n", op_tests[t].op_name);
         }
     }
 
     drm_test_teardown(info);
     return 0;
+error:
     drm_test_teardown(info);
     return 1;
 }
