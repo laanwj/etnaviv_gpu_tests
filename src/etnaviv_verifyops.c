@@ -39,8 +39,15 @@ enum compare_type {
     CT_FLOAT32_BCAST
 };
 
+typedef enum {
+    HWT_GC2000 = 1,
+    HWT_GC3000 = 2,
+    HWT_ALL = 3,
+} HardwareType;
+
 struct op_test {
     const char *op_name;
+    HardwareType hardware_type;
     enum compare_type compare_type;
     void (*generate_values_h)(size_t seed, void *a, size_t width);
     // Leave NULL for unary ops
@@ -66,11 +73,6 @@ struct gpu_code postlude = GPU_CODE(((uint32_t[]){
 }));
 
 static const char *COMPS = "xyzw";
-
-typedef enum {
-    HWT_GC2000 = 1,
-    HWT_GC3000 = 2,
-} HardwareType;
 
 #define MAX_INST 1024
 static void gen_cmd_stream(HardwareType hwt, struct etna_cmd_stream *stream, struct gpu_code *gpu_code, struct etna_bo *bo_code, struct etna_bo *out, struct etna_bo *in0, struct etna_bo *in1, uint32_t *auxin)
@@ -298,7 +300,7 @@ void i32_generate_values_v4(size_t seed, void *b, size_t height)
         } \
     }
 CPU_COMPUTE_FUNC4(nop_compute_cpu, uint32_t, 0xaaaaaaaa, 0x55555555, 0xaaaaaaaa, 0x55555555);
-/* u32 */
+/* 1-wide u32 */
 CPU_COMPUTE_FUNC1_PAD(addu32_single_compute_cpu, uint32_t, A + B);
 CPU_COMPUTE_FUNC1_BCAST(addu32_compute_cpu, uint32_t, A + B);
 CPU_COMPUTE_FUNC1_BCAST(mulu32_compute_cpu, uint32_t, A * B);
@@ -312,6 +314,15 @@ CPU_COMPUTE_FUNC1_BCAST(andu32_compute_cpu, uint32_t, A & B);
 CPU_COMPUTE_FUNC1_BCAST(xoru32_compute_cpu, uint32_t, A ^ B);
 CPU_COMPUTE_FUNC1_BCAST(notu32_compute_cpu, uint32_t, ~A);
 CPU_COMPUTE_FUNC1_BCAST(leadzerou32_compute_cpu, uint32_t, (A != 0) ? __builtin_clz(A) : 0x20);
+/* 4-wide u32 (GC3000) */
+CPU_COMPUTE_FUNC1_MULTI(lshiftu32_4w_compute_cpu, uint32_t, AI(i) << (BI(i)&31));
+CPU_COMPUTE_FUNC1_MULTI(rshiftu32_4w_compute_cpu, uint32_t, AI(i) >> (BI(i)&31));
+CPU_COMPUTE_FUNC1_MULTI(rotateu32_4w_compute_cpu, uint32_t, (AI(i) << (BI(i)&31)) | (AI(i) >> ((32-BI(i))&31)));
+CPU_COMPUTE_FUNC1_MULTI(oru32_4w_compute_cpu, uint32_t, AI(i) | BI(i));
+CPU_COMPUTE_FUNC1_MULTI(andu32_4w_compute_cpu, uint32_t, AI(i) & BI(i));
+CPU_COMPUTE_FUNC1_MULTI(xoru32_4w_compute_cpu, uint32_t, AI(i) ^ BI(i));
+CPU_COMPUTE_FUNC1_MULTI(notu32_4w_compute_cpu, uint32_t, ~AI(i));
+CPU_COMPUTE_FUNC1_MULTI(leadzerou32_4w_compute_cpu, uint32_t, (AI(i) != 0) ? __builtin_clz(AI(i)) : 0x20);
 /* float */
 CPU_COMPUTE_FUNC1_MULTI(addf32_compute_cpu, float, AI(i) + BI(i));
 CPU_COMPUTE_FUNC1_MULTI(mulf32_compute_cpu, float, AI(i) * BI(i));
@@ -326,18 +337,18 @@ CPU_COMPUTE_FUNC1_MULTI(mulf32_compute_cpu, float, AI(i) * BI(i));
  * It can also take an ancillary argument in u3, taken from auxin.
  */
 struct op_test op_tests[] = {
-    {"nop", CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)nop_compute_cpu,
+    {"nop", HWT_ALL, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)nop_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x00000000, 0x00000000, 0x00000000, 0x00000000, /* nop */
         }))
     },
     /* Add will only output one element at a time */
-    {"add.u32", CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)addu32_single_compute_cpu,
+    {"add.u32", HWT_ALL, CT_INT32, i32_generate_values_h, i32_generate_values_v, (void*)addu32_single_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x00841001, 0x00202800, 0x80000000, 0x00000038, /* add.u32       t4, t2, void, t3 */
         }))
     },
-    {"add4.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)addu32_compute_cpu,
+    {"add4.u32", HWT_ALL, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)addu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x00841001, 0x00202800, 0x80000000, 0x00000038, /* add.u32       t4.x___, t2.xxxx, void, t3.xxxx */
             0x01041001, 0x00202800, 0x80000000, 0x00000038, /* add.u32       t4._y__, t2.xxxx, void, t3.xxxx */
@@ -345,58 +356,102 @@ struct op_test op_tests[] = {
             0x04041001, 0x00202800, 0x80000000, 0x00000038, /* add.u32       t4.___w, t2.xxxx, void, t3.xxxx */
         }))
     },
-    {"imullo0.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)mulu32_compute_cpu,
+    {"imullo0.u32", HWT_ALL, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)mulu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784103c, 0x39202800, 0x81c801c0, 0x00000000, /* imullo0.u32   t4, t2, t3, void */
         }))
     },
-    {"imulhi0.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)mulhu32_compute_cpu,
+    {"imulhi0.u32", HWT_ALL, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)mulhu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x07841000, 0x39202800, 0x81c901c0, 0x00000000, /* imulhi0.u32   t4, t2, t3, void */
         }))
     },
-    {"imadlo0.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)madu32_compute_cpu,
+    {"imadlo0.u32", HWT_ALL, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)madu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784100c, 0x39202800, 0x81c901c0, 0x20390038, /* imadlo0.u32   t4, t2, t3, u3 */
         })),
         {0x12345678, 0x0, 0x0, 0x0}
     },
-    {"lshift.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)lshiftu32_compute_cpu,
+
+    /** GC2000 behavior of bitwise instructions */
+    {"lshift.u32", HWT_GC2000, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)lshiftu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x07841019, 0x39202800, 0x80010000, 0x00390038, /* lshift.u32    t4, t2, void, t3 */
         }))
     },
-    {"rshift.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)rshiftu32_compute_cpu,
+    {"rshift.u32", HWT_GC2000, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)rshiftu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101a, 0x39202800, 0x80010000, 0x00390038, /* rshift.u32    t4, t2, void, t3 */
         }))
     },
-    {"rotate.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)rotateu32_compute_cpu,
+    {"rotate.u32", HWT_GC2000, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)rotateu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101b, 0x39202800, 0x80010000, 0x00390038, /* rotate.u32    t4, t2, void, t3 */
         }))
     },
-    {"or.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)oru32_compute_cpu,
+    {"or.u32", HWT_GC2000, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)oru32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101c, 0x39202800, 0x80010000, 0x00390038, /* or.u32        t4, t2, void, t3 */
         }))
     },
-    {"and.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)andu32_compute_cpu,
+    {"and.u32", HWT_GC2000, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)andu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101d, 0x39202800, 0x80010000, 0x00390038, /* and.u32       t4, t2, void, t3 */
         }))
     },
-    {"xor.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)xoru32_compute_cpu,
+    {"xor.u32", HWT_GC2000, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)xoru32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101e, 0x39202800, 0x80010000, 0x00390038, /* xor.u32       t4, t2, void, t3 */
         }))
     },
-    {"not.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)notu32_compute_cpu,
+    {"not.u32", HWT_GC2000, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)notu32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x0784101f, 0x00200000, 0x80010000, 0x00390028, /* not.u32       t4, void, void, t2 */
         }))
     },
-    {"leadzero.u32", CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)leadzerou32_compute_cpu,
+    {"leadzero.u32", HWT_GC2000, CT_INT32_BCAST, i32_generate_values_h, i32_generate_values_v, (void*)leadzerou32_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x07841018, 0x00200000, 0x80010000, 0x00390028, /* leadzero.u32  t4, void, void, t2 */
+        }))
+    },
+
+    /** GC3000 behavior of bitwise instructions */
+    {"lshift.u32", HWT_GC3000, CT_INT32, i32_generate_values_h4, i32_generate_values_v4, (void*)lshiftu32_4w_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x07841019, 0x39202800, 0x80010000, 0x00390038, /* lshift.u32    t4, t2, void, t3 */
+        }))
+    },
+    {"rshift.u32", HWT_GC3000, CT_INT32, i32_generate_values_h4, i32_generate_values_v4, (void*)rshiftu32_4w_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x0784101a, 0x39202800, 0x80010000, 0x00390038, /* rshift.u32    t4, t2, void, t3 */
+        }))
+    },
+    {"rotate.u32", HWT_GC3000, CT_INT32, i32_generate_values_h4, i32_generate_values_v4, (void*)rotateu32_4w_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x0784101b, 0x39202800, 0x80010000, 0x00390038, /* rotate.u32    t4, t2, void, t3 */
+        }))
+    },
+    {"or.u32", HWT_GC3000, CT_INT32, i32_generate_values_h4, i32_generate_values_v4, (void*)oru32_4w_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x0784101c, 0x39202800, 0x80010000, 0x00390038, /* or.u32        t4, t2, void, t3 */
+        }))
+    },
+    {"and.u32", HWT_GC3000, CT_INT32, i32_generate_values_h4, i32_generate_values_v4, (void*)andu32_4w_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x0784101d, 0x39202800, 0x80010000, 0x00390038, /* and.u32       t4, t2, void, t3 */
+        }))
+    },
+    {"xor.u32", HWT_GC3000, CT_INT32, i32_generate_values_h4, i32_generate_values_v4, (void*)xoru32_4w_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x0784101e, 0x39202800, 0x80010000, 0x00390038, /* xor.u32       t4, t2, void, t3 */
+        }))
+    },
+    {"not.u32", HWT_GC3000, CT_INT32, i32_generate_values_h4, i32_generate_values_v4, (void*)notu32_4w_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x0784101f, 0x00200000, 0x80010000, 0x00390028, /* not.u32       t4, void, void, t2 */
+        }))
+    },
+    {"leadzero.u32", HWT_GC3000, CT_INT32, i32_generate_values_h4, i32_generate_values_v4, (void*)leadzerou32_4w_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x07841018, 0x00200000, 0x80010000, 0x00390028, /* leadzero.u32  t4, void, void, t2 */
         }))
@@ -404,7 +459,7 @@ struct op_test op_tests[] = {
     // add.u16 does nothing
     // 0x00801001, 0x15402800, 0xc0000000, 0x00000018, /* add.u16       t0.x___, t2.yyyy, void, t1.xxxx */
     // Need an effective way of comparing these
-    {"add.f32", CT_FLOAT32, i32_generate_values_h4, i32_generate_values_v4, (void*)addf32_compute_cpu,
+    {"add.f32", HWT_ALL, CT_FLOAT32, i32_generate_values_h4, i32_generate_values_v4, (void*)addf32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x07841001, 0x39002800, 0x00000000, 0x00390038, /* add           t4, t2, void, t3 */
         }))
@@ -577,7 +632,11 @@ int main(int argc, char *argv[])
     }
     for (unsigned t=0; t<ARRAY_SIZE(op_tests); ++t)
     {
-        perform_test(hwt, info, &op_tests[t], 100);
+        if (op_tests[t].hardware_type & hwt) {
+            perform_test(hwt, info, &op_tests[t], 100);
+        } else {
+            printf("%s (skipped)\n", op_tests[t].op_name);
+        }
     }
 
     drm_test_teardown(info);
