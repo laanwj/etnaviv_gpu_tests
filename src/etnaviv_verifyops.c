@@ -260,6 +260,18 @@ void i32_generate_values_v4(size_t seed, void *b, size_t height)
             } \
         } \
     }
+/* Scalar computation per channel (use index i) */
+#define CPU_COMPUTE_FUNC1_MULTI(_name, _type, _expr) \
+    static void _name(_type *out, const _type *a, const _type *b, size_t width, size_t height) \
+    { \
+        for(size_t y=0; y<height; ++y) { \
+            for(size_t x=0; x<width; ++x) { \
+                for(size_t i=0; i<4; ++i) { \
+                    out[(y*width+x)*4+i] = (_expr); \
+                } \
+            } \
+        } \
+    }
 /* Scalar computation on one channel only, rest will stay at padding pattern */
 #define CPU_COMPUTE_FUNC1_PAD(_name, _type, _expr) \
     static void _name(_type *out, const _type *a, const _type *b, size_t width, size_t height) \
@@ -302,8 +314,8 @@ CPU_COMPUTE_FUNC1_BCAST(xoru32_compute_cpu, uint32_t, A ^ B);
 CPU_COMPUTE_FUNC1_BCAST(notu32_compute_cpu, uint32_t, ~A);
 CPU_COMPUTE_FUNC1_BCAST(leadzerou32_compute_cpu, uint32_t, (A != 0) ? __builtin_clz(A) : 0x20);
 /* float */
-CPU_COMPUTE_FUNC4(addf32_compute_cpu, float, AI(0) + BI(0), AI(1) + BI(1), AI(2) + BI(2), AI(3) + BI(3));
-CPU_COMPUTE_FUNC4(mulf32_compute_cpu, float, AI(0) * BI(0), AI(1) * BI(1), AI(2) * BI(2), AI(3) * BI(3));
+CPU_COMPUTE_FUNC1_MULTI(addf32_compute_cpu, float, AI(i) + BI(i));
+CPU_COMPUTE_FUNC1_MULTI(mulf32_compute_cpu, float, AI(i) * BI(i));
 
 #undef A
 #undef B
