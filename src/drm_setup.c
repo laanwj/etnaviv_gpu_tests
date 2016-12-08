@@ -38,7 +38,7 @@ struct drm_test_info *drm_test_setup(int argc, char **argv)
     }
 
     /* TODO: we assume that core 1 is a 3D+CL capable one.
-     * This is pretty much only true for GC2000.
+     * This is pretty much only true for i.MX6q(p).
      * If the tests don't work on your hardware check this carefully.
      */
     info->gpu = etna_gpu_new(info->dev, 1);

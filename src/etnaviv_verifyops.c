@@ -68,12 +68,18 @@ struct gpu_code postlude = GPU_CODE(((uint32_t[]){
 
 static const char *COMPS = "xyzw";
 
+typedef enum {
+    HWT_GC2000 = 1,
+    HWT_GC3000 = 2,
+} HardwareType;
+
 #define MAX_INST 1024
-static void gen_cmd_stream(struct etna_cmd_stream *stream, struct gpu_code *gpu_code, struct etna_bo *out, struct etna_bo *in0, struct etna_bo *in1, uint32_t *auxin)
+static void gen_cmd_stream(HardwareType hwt, struct etna_cmd_stream *stream, struct gpu_code *gpu_code, struct etna_bo *bo_code, struct etna_bo *out, struct etna_bo *in0, struct etna_bo *in1, uint32_t *auxin)
 {
     unsigned num_inst;
     uint32_t code[MAX_INST*4];
     unsigned code_ptr = 0;
+    unsigned uniform_base = 0;
 
     for (unsigned i=0; i<prelude.size; ++i)
         code[code_ptr++] = prelude.code[i];
@@ -83,39 +89,56 @@ static void gen_cmd_stream(struct etna_cmd_stream *stream, struct gpu_code *gpu_
         code[code_ptr++] = postlude.code[i];
     assert((code_ptr & 3)==0);
     num_inst = code_ptr / 4; /* number of instructions including final nop */
+    memcpy(etna_bo_map(bo_code), code, code_ptr * 4); /* upload for gc3000 */
 
     etna_set_state(stream, VIVS_PA_SYSTEM_MODE, VIVS_PA_SYSTEM_MODE_UNK0 | VIVS_PA_SYSTEM_MODE_UNK4);
     etna_set_state(stream, VIVS_GL_API_MODE, VIVS_GL_API_MODE_OPENCL);
-    /* Need to write *something* to VS input registers before writing shader uniforms and code. Otherwise
-     * the whole thing will hang when running this first after boot.
-     */
-    etna_set_state(stream, VIVS_VS_INPUT_COUNT, VIVS_VS_INPUT_COUNT_COUNT(1) | VIVS_VS_INPUT_COUNT_UNK8(31));
-    etna_set_state(stream, VIVS_VS_INPUT(0), VIVS_VS_INPUT_I0(0) | VIVS_VS_INPUT_I1(1) | VIVS_VS_INPUT_I2(2) | VIVS_VS_INPUT_I3(3));
+    if (hwt == HWT_GC2000) {
+        /* Need to write *something* to VS input registers before writing shader uniforms and code. Otherwise
+         * the whole thing will hang when running this first after boot.
+         */
+        etna_set_state(stream, VIVS_VS_INPUT_COUNT, VIVS_VS_INPUT_COUNT_COUNT(1) | VIVS_VS_INPUT_COUNT_UNK8(31));
+        etna_set_state(stream, VIVS_VS_INPUT(0), VIVS_VS_INPUT_I0(0) | VIVS_VS_INPUT_I1(1) | VIVS_VS_INPUT_I2(2) | VIVS_VS_INPUT_I3(3));
+    }
 
-    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(0), out, ETNA_RELOC_WRITE); /* u0.x */
-    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(1), in0, ETNA_RELOC_READ); /* u0.y */
-    etna_set_state_from_bo(stream, VIVS_VS_UNIFORMS(2), in1, ETNA_RELOC_READ); /* u0.z */
-    etna_set_state(stream, VIVS_VS_UNIFORMS(3), 0x4);  /* u0.w Left-shift */
-    etna_set_state(stream, VIVS_VS_UNIFORMS(4), 0x10); /* u1.x Row stride */
-    etna_set_state(stream, VIVS_VS_UNIFORMS(5), 0x0);  /* u1.y Unused */
-    etna_set_state(stream, VIVS_VS_UNIFORMS(6), 0x0);  /* u1.z Unused */
-    etna_set_state(stream, VIVS_VS_UNIFORMS(7), 0x0);  /* u1.w Unused */
-    etna_set_state(stream, VIVS_VS_UNIFORMS(8), 0xaaaaaaaa); /* u2.x Default output (if GPU program generates no output in t4) */
-    etna_set_state(stream, VIVS_VS_UNIFORMS(9), 0x55555555); /* u2.y */
-    etna_set_state(stream, VIVS_VS_UNIFORMS(10), 0xaaaaaaaa); /* u2.z */
-    etna_set_state(stream, VIVS_VS_UNIFORMS(11), 0x55555555); /* u2.w */
-    etna_set_state(stream, VIVS_VS_UNIFORMS(12), auxin[0]); /* u3.x Ancillary input for testing three-operand instructions */
-    etna_set_state(stream, VIVS_VS_UNIFORMS(13), auxin[1]); /* u3.y */
-    etna_set_state(stream, VIVS_VS_UNIFORMS(14), auxin[2]); /* u3.z */
-    etna_set_state(stream, VIVS_VS_UNIFORMS(15), auxin[3]); /* u3.w */
+    if (hwt == HWT_GC3000) {
+        /* GC3000: unified uniforms, shader instructions in memory */
+        uniform_base = VIVS_SH_UNIFORMS(0);
+        etna_set_state_from_bo(stream, VIVS_PS_INST_ADDR, bo_code, ETNA_RELOC_READ);
 
-    for (unsigned i=0; i<code_ptr; ++i)
-        etna_set_state(stream, VIVS_SH_INST_MEM(i), code[i]);
+    } else if (hwt == HWT_GC2000) {
+        /* GC2000: VS uniforms, shader instructions on-chip */
+        uniform_base = VIVS_VS_UNIFORMS(0);
+        for (unsigned i=0; i<code_ptr; ++i)
+            etna_set_state(stream, VIVS_SH_INST_MEM(i), code[i]);
+    }
+    /* Set uniforms */
+    etna_set_state_from_bo(stream, uniform_base + 0*4, out, ETNA_RELOC_WRITE); /* u0.x */
+    etna_set_state_from_bo(stream, uniform_base + 1*4, in0, ETNA_RELOC_READ); /* u0.y */
+    etna_set_state_from_bo(stream, uniform_base + 2*4, in1, ETNA_RELOC_READ); /* u0.z */
+    etna_set_state(stream, uniform_base + 3*4, 0x4);  /* u0.w Left-shift */
+    etna_set_state(stream, uniform_base + 4*4, 0x10); /* u1.x Row stride */
+    etna_set_state(stream, uniform_base + 5*4, 0x0);  /* u1.y Unused */
+    etna_set_state(stream, uniform_base + 6*4, 0x0);  /* u1.z Unused */
+    etna_set_state(stream, uniform_base + 7*4, 0x0);  /* u1.w Unused */
+    etna_set_state(stream, uniform_base + 8*4, 0xaaaaaaaa); /* u2.x Default output (if GPU program generates no output in t4) */
+    etna_set_state(stream, uniform_base + 9*4, 0x55555555); /* u2.y */
+    etna_set_state(stream, uniform_base + 10*4, 0xaaaaaaaa); /* u2.z */
+    etna_set_state(stream, uniform_base + 11*4, 0x55555555); /* u2.w */
+    etna_set_state(stream, uniform_base + 12*4, auxin[0]); /* u3.x Ancillary input for testing three-operand instructions */
+    etna_set_state(stream, uniform_base + 13*4, auxin[1]); /* u3.y */
+    etna_set_state(stream, uniform_base + 14*4, auxin[2]); /* u3.z */
+    etna_set_state(stream, uniform_base + 15*4, auxin[3]); /* u3.w */
 
     etna_set_state(stream, VIVS_VS_INPUT_COUNT, VIVS_VS_INPUT_COUNT_COUNT(1) | VIVS_VS_INPUT_COUNT_UNK8(1));
     etna_set_state(stream, VIVS_VS_TEMP_REGISTER_CONTROL, VIVS_VS_TEMP_REGISTER_CONTROL_NUM_TEMPS(10));
     etna_set_state(stream, VIVS_VS_OUTPUT(0), VIVS_VS_OUTPUT_O0(0) | VIVS_VS_OUTPUT_O1(0) | VIVS_VS_OUTPUT_O2(0) | VIVS_VS_OUTPUT_O3(0));
-    etna_set_state(stream, VIVS_VS_NEW_UNK00860, 0x0);
+    /* Unknown state set differently for GC2000 and GC3000 */
+    if (hwt == HWT_GC3000) {
+        etna_set_state(stream, VIVS_VS_NEW_UNK00860, 0x1011); /* PS/VS units? */
+    } else if (hwt == HWT_GC2000) {
+        etna_set_state(stream, VIVS_VS_NEW_UNK00860, 0x0);
+    }
     etna_set_state(stream, VIVS_VS_RANGE, VIVS_VS_RANGE_LOW(0x0) | VIVS_VS_RANGE_HIGH(num_inst - 2));
     etna_set_state(stream, VIVS_VS_LOAD_BALANCING, VIVS_VS_LOAD_BALANCING_A(0x42) | VIVS_VS_LOAD_BALANCING_B(0x5) | VIVS_VS_LOAD_BALANCING_C(0x3f) | VIVS_VS_LOAD_BALANCING_D(0xf));
     etna_set_state(stream, VIVS_VS_OUTPUT_COUNT, 1);
@@ -129,7 +152,16 @@ static void gen_cmd_stream(struct etna_cmd_stream *stream, struct gpu_code *gpu_
     etna_set_state(stream, VIVS_PS_CONTROL, 0);
     etna_set_state(stream, VIVS_PS_UNK01030, 0x0);
 
-    etna_set_state(stream, VIVS_PA_ATTRIBUTE_ELEMENT_COUNT, VIVS_PA_ATTRIBUTE_ELEMENT_COUNT_UNK0(0x0) | VIVS_PA_ATTRIBUTE_ELEMENT_COUNT_COUNT(0x0));
+    if (hwt == HWT_GC3000) {
+        /* GC3000: Needs some PA state */
+        etna_set_state(stream, VIVS_PA_SHADER_ATTRIBUTES(0), VIVS_PA_SHADER_ATTRIBUTES_UNK4(0x0) | VIVS_PA_SHADER_ATTRIBUTES_UNK8(0x2));
+        etna_set_state(stream, VIVS_PA_ATTRIBUTE_ELEMENT_COUNT, VIVS_PA_ATTRIBUTE_ELEMENT_COUNT_UNK0(0x0) | VIVS_PA_ATTRIBUTE_ELEMENT_COUNT_COUNT(0x1));
+
+    } else if (hwt == HWT_GC2000) {
+
+        /* GC2000: Disable PA */
+        etna_set_state(stream, VIVS_PA_ATTRIBUTE_ELEMENT_COUNT, VIVS_PA_ATTRIBUTE_ELEMENT_COUNT_UNK0(0x0) | VIVS_PA_ATTRIBUTE_ELEMENT_COUNT_COUNT(0x0));
+    }
 
     etna_set_state(stream, VIVS_CL_UNK00924, 0x0);
     etna_set_state(stream, VIVS_CL_CONFIG, VIVS_CL_CONFIG_DIMENSIONS(0x2) | VIVS_CL_CONFIG_TRAVERSE_ORDER(0x0) | VIVS_CL_CONFIG_SWATH_SIZE_X(0x0) | VIVS_CL_CONFIG_SWATH_SIZE_Y(0x0) | VIVS_CL_CONFIG_SWATH_SIZE_Z(0x0) | VIVS_CL_CONFIG_VALUE_ORDER(0x3));
@@ -140,6 +172,27 @@ static void gen_cmd_stream(struct etna_cmd_stream *stream, struct gpu_code *gpu_
     etna_set_state(stream, VIVS_CL_WORKGROUP_Y, VIVS_CL_WORKGROUP_Y_SIZE(0x7) | VIVS_CL_WORKGROUP_Y_COUNT(0x1));
     etna_set_state(stream, VIVS_CL_WORKGROUP_Z, VIVS_CL_WORKGROUP_Z_SIZE(0x3ff) | VIVS_CL_WORKGROUP_Z_COUNT(0xffff));
     etna_set_state(stream, VIVS_CL_THREAD_ALLOCATION, 0x4);
+
+    if (hwt == HWT_GC3000) {
+
+        /* GC3000-only unknown state */
+        etna_set_state(stream, VIVS_RA_CONTROL, VIVS_RA_CONTROL_UNK0);
+        etna_set_state(stream, VIVS_PS_UNK01024, 0x0);
+        etna_set_state(stream, VIVS_VS_UNK00868, 0x21);
+        /* GC3000 uses the PS_RANGE instead of VS_RANGE for marking the CL shader instruction range */
+        etna_set_state(stream, VIVS_PS_RANGE, VIVS_PS_RANGE_LOW(0x0) | VIVS_PS_RANGE_HIGH(num_inst - 2));
+        /* GC3000: Needs PS output register */
+        etna_set_state(stream, VIVS_PS_OUTPUT_REG, 0x0);
+        /* Load balancing set differently for GC3000 */
+        etna_set_state(stream, VIVS_VS_LOAD_BALANCING, VIVS_VS_LOAD_BALANCING_A(0x0) | VIVS_VS_LOAD_BALANCING_B(0x0) | VIVS_VS_LOAD_BALANCING_C(0x3f) | VIVS_VS_LOAD_BALANCING_D(0xf));
+        /* GC3000: Extra registers that seem to mirror CL_GLOBAL and CL_WORKGROUP */
+        etna_set_state(stream, VIVS_CL_UNK00940, 0x1);
+        etna_set_state(stream, VIVS_CL_UNK00944, 0x1);
+        etna_set_state(stream, VIVS_CL_UNK00948, 0xffffffff);
+        etna_set_state(stream, VIVS_CL_UNK0094C, 0x7);
+        etna_set_state(stream, VIVS_CL_UNK00950, 0x7);
+        etna_set_state(stream, VIVS_CL_UNK00954, 0x3ff);
+    }
 
     /* Kick off program */
     etna_set_state(stream, VIVS_CL_KICKER, 0xbadabeeb);
@@ -340,19 +393,20 @@ bool compare_float(uint32_t a, uint32_t b)
     return false;
 }
 
-int perform_test(struct drm_test_info *info, struct op_test *cur_test, int repeats)
+int perform_test(HardwareType hwt, struct drm_test_info *info, struct op_test *cur_test, int repeats)
 {
     int retval = -1;
     const size_t unit_size = 16; /* vec4 of any 32-bit type */
     const size_t width = 16;
     const size_t height = 16;
     size_t seedx, seedy;
-    struct etna_bo *bo_out=0, *bo_in0=0, *bo_in1=0;
+    struct etna_bo *bo_out=0, *bo_in0=0, *bo_in1=0, *bo_code=0;
     unsigned int errors = 0;
 
     size_t out_size = width * height * unit_size;
     size_t in0_size = width * unit_size;
     size_t in1_size = height * unit_size;
+    size_t max_code_size = MAX_INST * 16;
 
     void *out_cpu = malloc(out_size);
     void *a_cpu = malloc(in0_size);
@@ -367,6 +421,7 @@ int perform_test(struct drm_test_info *info, struct op_test *cur_test, int repea
     bo_out = etna_bo_new(info->dev, out_size, DRM_ETNA_GEM_CACHE_UNCACHED);
     bo_in0 = etna_bo_new(info->dev, in0_size, DRM_ETNA_GEM_CACHE_UNCACHED);
     bo_in1 = etna_bo_new(info->dev, in1_size, DRM_ETNA_GEM_CACHE_UNCACHED);
+    bo_code = etna_bo_new(info->dev, max_code_size, DRM_ETNA_GEM_CACHE_UNCACHED);
     if (!bo_in0 || !bo_in1 || !bo_out) {
         fprintf(stderr, "Unable to allocate buffer\n");
         goto out;
@@ -383,7 +438,7 @@ int perform_test(struct drm_test_info *info, struct op_test *cur_test, int repea
         memcpy(etna_bo_map(bo_in1), b_cpu, in1_size);
 
         /* generate command sequence */
-        gen_cmd_stream(info->stream, &cur_test->gpu_code, bo_out, bo_in0, bo_in1, cur_test->auxin);
+        gen_cmd_stream(hwt, info->stream, &cur_test->gpu_code, bo_code, bo_out, bo_in0, bo_in1, cur_test->auxin);
         /* execute command sequence */
         etna_cmd_stream_finish(info->stream);
 
@@ -451,12 +506,25 @@ int main(int argc, char *argv[])
 {
     srand(time(NULL));
     struct drm_test_info *info;
+    uint64_t val;
+    HardwareType hwt = HWT_GC2000;
     if ((info = drm_test_setup(argc, argv)) == NULL) {
+        return 1;
+    }
+    if (etna_gpu_get_param(info->gpu, ETNA_GPU_MODEL, &val)) {
+        fprintf(stderr, "Could not get GPU model\n");
+        return 1;
+    }
+    switch (val) {
+    case 0x2000: printf("  Model: GC2000\n"); hwt = HWT_GC2000; break;
+    case 0x3000: printf("  Model: GC3000\n"); hwt = HWT_GC3000; break;
+    default:
+        fprintf(stderr, "Do not know how to handle GPU model %08x\n", (uint32_t)val);
         return 1;
     }
     for (unsigned t=0; t<ARRAY_SIZE(op_tests); ++t)
     {
-        perform_test(info, &op_tests[t], 100);
+        perform_test(hwt, info, &op_tests[t], 100);
     }
 
     drm_test_teardown(info);
