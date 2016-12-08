@@ -217,9 +217,9 @@ void i32_generate_values_h4(size_t seed, void *a, size_t width)
     uint32_t base = seed * width;
     for (size_t x=0; x<width; ++x) {
         ((uint32_t*)a)[x*4+0] = base + x;
-        ((uint32_t*)a)[x*4+1] = base + x + 0x010000;
-        ((uint32_t*)a)[x*4+2] = base + x + 0x020000;
-        ((uint32_t*)a)[x*4+3] = base + x + 0x030000;
+        ((uint32_t*)a)[x*4+1] = base + x + 0x010001;
+        ((uint32_t*)a)[x*4+2] = base + x + 0x020002;
+        ((uint32_t*)a)[x*4+3] = base + x + 0x030003;
     }
 }
 
@@ -239,9 +239,9 @@ void i32_generate_values_v4(size_t seed, void *b, size_t height)
     uint32_t base = seed * height;
     for (size_t y=0; y<height; ++y) {
         ((uint32_t*)b)[y*4+0] = base + y;
-        ((uint32_t*)b)[y*4+1] = base + y + 0x010000;
-        ((uint32_t*)b)[y*4+2] = base + y + 0x020000;
-        ((uint32_t*)b)[y*4+3] = base + y + 0x030000;
+        ((uint32_t*)b)[y*4+1] = base + y + 0x010001;
+        ((uint32_t*)b)[y*4+2] = base + y + 0x020002;
+        ((uint32_t*)b)[y*4+3] = base + y + 0x030003;
     }
 }
 
