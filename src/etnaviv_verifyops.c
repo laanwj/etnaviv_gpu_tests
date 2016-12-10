@@ -116,6 +116,7 @@ static void gen_cmd_stream(enum hardware_type hwt, struct etna_cmd_stream *strea
         for (unsigned i=0; i<code_ptr; ++i)
             etna_set_state(stream, VIVS_SH_INST_MEM(i), code[i]);
     }
+
     /* Set uniforms */
     etna_set_state_from_bo(stream, uniform_base + 0*4, out, ETNA_RELOC_WRITE); /* u0.x */
     etna_set_state_from_bo(stream, uniform_base + 1*4, in0, ETNA_RELOC_READ); /* u0.y */
@@ -374,6 +375,7 @@ CPU_COMPUTE_FUNC1_BCAST(andu32_compute_cpu, uint32_t, A & B);
 CPU_COMPUTE_FUNC1_BCAST(xoru32_compute_cpu, uint32_t, A ^ B);
 CPU_COMPUTE_FUNC1_BCAST(notu32_compute_cpu, uint32_t, ~A);
 CPU_COMPUTE_FUNC1_BCAST(leadzerou32_compute_cpu, uint32_t, (A != 0) ? __builtin_clz(A) : 0x20);
+CPU_COMPUTE_FUNC1_BCAST(popcountu32_compute_cpu, uint32_t, __builtin_popcount(A));
 /* 4-wide u32 (GC3000) */
 CPU_COMPUTE_FUNC1_MULTI(addu32_4w_compute_cpu, uint32_t, AI(i) + BI(i));
 CPU_COMPUTE_FUNC1_MULTI(lshiftu32_4w_compute_cpu, uint32_t, AI(i) << (BI(i)&31));
@@ -384,6 +386,7 @@ CPU_COMPUTE_FUNC1_MULTI(andu32_4w_compute_cpu, uint32_t, AI(i) & BI(i));
 CPU_COMPUTE_FUNC1_MULTI(xoru32_4w_compute_cpu, uint32_t, AI(i) ^ BI(i));
 CPU_COMPUTE_FUNC1_MULTI(notu32_4w_compute_cpu, uint32_t, ~AI(i));
 CPU_COMPUTE_FUNC1_MULTI(leadzerou32_4w_compute_cpu, uint32_t, (AI(i) != 0) ? __builtin_clz(AI(i)) : 0x20);
+CPU_COMPUTE_FUNC1_MULTI(popcountu32_4w_compute_cpu, uint32_t, __builtin_popcount(AI(i)));
 /* float */
 CPU_COMPUTE_FUNC1_MULTI(addf32_compute_cpu, float, AI(i) + BI(i));
 CPU_COMPUTE_FUNC1_MULTI(mulf32_compute_cpu, float, AI(i) * BI(i));
@@ -485,6 +488,12 @@ struct op_test op_tests[] = {
             0x07841018, 0x00200000, 0x80010000, 0x00390028, /* leadzero.u32  t4, void, void, t2 */
         }))
     },
+    {"popcount.u32", HWT_GC2000, CT_INT32_BCAST, i32_generate_values_h, NULL, (void*)popcountu32_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x07841021, 0x00200000, 0x80010000, 0x00390028, /* popcount.u32    t4, void, void, t2 */
+        }))
+    },
+
     /** Conversion instructions - GC2000 */
     {"f2i.s32", HWT_GC2000, CT_INT32_BCAST, i32_generate_values_h, NULL, (void*)f2i_s32_compute_cpu,
         GPU_CODE(((uint32_t[]){
@@ -554,6 +563,11 @@ struct op_test op_tests[] = {
     {"leadzero.u32", HWT_GC3000, CT_INT32, i32_generate_values_h4, NULL, (void*)leadzerou32_4w_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x07841018, 0x00200000, 0x80010000, 0x00390028, /* leadzero.u32  t4, void, void, t2 */
+        }))
+    },
+    {"popcount.u32", HWT_GC3000, CT_INT32, i32_generate_values_h, NULL, (void*)popcountu32_4w_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x07841021, 0x00200000, 0x80010000, 0x00390028, /* popcount.u32    t4, void, void, t2 */
         }))
     },
 
