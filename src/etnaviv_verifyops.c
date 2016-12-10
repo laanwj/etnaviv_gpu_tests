@@ -95,6 +95,7 @@ static void gen_cmd_stream(enum hardware_type hwt, struct etna_cmd_stream *strea
 
     etna_set_state(stream, VIVS_PA_SYSTEM_MODE, VIVS_PA_SYSTEM_MODE_UNK0 | VIVS_PA_SYSTEM_MODE_UNK4);
     etna_set_state(stream, VIVS_GL_API_MODE, VIVS_GL_API_MODE_OPENCL);
+
     if (hwt == HWT_GC2000) {
         /* Need to write *something* to VS input registers before writing shader uniforms and code. Otherwise
          * the whole thing will hang when running this first after boot.
@@ -106,6 +107,7 @@ static void gen_cmd_stream(enum hardware_type hwt, struct etna_cmd_stream *strea
     if (hwt == HWT_GC3000) {
         /* GC3000: unified uniforms, shader instructions in memory */
         uniform_base = VIVS_SH_UNIFORMS(0);
+        etna_set_state(stream, VIVS_VS_ICACHE_CONTROL, 0x21);
         etna_set_state_from_bo(stream, VIVS_PS_INST_ADDR, bo_code, ETNA_RELOC_READ);
 
     } else if (hwt == HWT_GC2000) {
@@ -152,7 +154,7 @@ static void gen_cmd_stream(enum hardware_type hwt, struct etna_cmd_stream *strea
     etna_set_state(stream, VIVS_PS_INPUT_COUNT, VIVS_PS_INPUT_COUNT_COUNT(1) | VIVS_PS_INPUT_COUNT_UNK8(31));
     etna_set_state(stream, VIVS_PS_TEMP_REGISTER_CONTROL, VIVS_PS_TEMP_REGISTER_CONTROL_NUM_TEMPS(10));
     etna_set_state(stream, VIVS_PS_CONTROL, 0);
-    etna_set_state(stream, VIVS_PS_UNK01030, 0x0);
+    etna_set_state(stream, VIVS_PS_CONTROL_EXT, 0x0);
 
     if (hwt == HWT_GC3000) {
         /* GC3000: Needs some PA state */
@@ -179,8 +181,7 @@ static void gen_cmd_stream(enum hardware_type hwt, struct etna_cmd_stream *strea
 
         /* GC3000-only unknown state */
         etna_set_state(stream, VIVS_RA_CONTROL, VIVS_RA_CONTROL_UNK0);
-        etna_set_state(stream, VIVS_PS_UNK01024, 0x0);
-        etna_set_state(stream, VIVS_VS_UNK00868, 0x21);
+        etna_set_state(stream, VIVS_PS_UNIFORM_BASE, 0x0);
         /* GC3000 uses the PS_RANGE instead of VS_RANGE for marking the CL shader instruction range */
         etna_set_state(stream, VIVS_PS_RANGE, VIVS_PS_RANGE_LOW(0x0) | VIVS_PS_RANGE_HIGH(num_inst - 2));
         /* GC3000: Needs PS output register */
@@ -765,8 +766,6 @@ int main(int argc, char *argv[])
             continue;
         if (op_tests[t].hardware_type & hwt) {
             perform_test(hwt, info, &op_tests[t], reps);
-        } else {
-            printf("%s: (skipped)\n", op_tests[t].op_name);
         }
     }
 

@@ -58,9 +58,9 @@ static void gen_cmd_stream(struct etna_cmd_stream *stream, struct etna_bo *code,
     etna_set_state(stream, VIVS_GL_VARYING_NUM_COMPONENTS, VIVS_GL_VARYING_NUM_COMPONENTS_VAR0(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR1(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR2(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR3(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR4(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR5(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR6(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR7(0x0));
     etna_set_state(stream, VIVS_GL_UNK03834, 0x0);
     etna_set_state(stream, VIVS_VS_NEW_UNK00860, 0x1011);
-    etna_set_state(stream, VIVS_PS_UNK01024, 0x0);
+    etna_set_state(stream, VIVS_PS_UNIFORM_BASE, 0x0);
     etna_set_state(stream, VIVS_SH_UNIFORMS(1), 0x0);
-    etna_set_state(stream, VIVS_VS_UNK00868, 0x21);
+    etna_set_state(stream, VIVS_VS_ICACHE_CONTROL, 0x21);
     etna_set_state(stream, VIVS_PS_RANGE, VIVS_PS_RANGE_LOW(0x0) | VIVS_PS_RANGE_HIGH(0xf));
     etna_set_state_from_bo(stream, VIVS_PS_INST_ADDR, code, ETNA_RELOC_READ);
     etna_set_state(stream, VIVS_PS_INPUT_COUNT, VIVS_PS_INPUT_COUNT_COUNT(1) | VIVS_PS_INPUT_COUNT_UNK8(31));
@@ -68,7 +68,7 @@ static void gen_cmd_stream(struct etna_cmd_stream *stream, struct etna_bo *code,
     etna_set_state(stream, VIVS_PS_CONTROL, 0);
     etna_set_state(stream, VIVS_PA_ATTRIBUTE_ELEMENT_COUNT, VIVS_PA_ATTRIBUTE_ELEMENT_COUNT_UNK0(0x0) | VIVS_PA_ATTRIBUTE_ELEMENT_COUNT_COUNT(0x0));
     etna_set_state(stream, VIVS_GL_VARYING_TOTAL_COMPONENTS, VIVS_GL_VARYING_TOTAL_COMPONENTS_NUM(0x0));
-    etna_set_state(stream, VIVS_PS_UNK01030, 0x0);
+    etna_set_state(stream, VIVS_PS_CONTROL_EXT, 0x0);
     etna_set_state(stream, VIVS_VS_LOAD_BALANCING, VIVS_VS_LOAD_BALANCING_A(0x0) | VIVS_VS_LOAD_BALANCING_B(0x0) | VIVS_VS_LOAD_BALANCING_C(0x3f) | VIVS_VS_LOAD_BALANCING_D(0xf));
     etna_set_state(stream, VIVS_VS_OUTPUT_COUNT, 1);
     etna_set_state(stream, VIVS_CL_CONFIG, VIVS_CL_CONFIG_DIMENSIONS(0x1) | VIVS_CL_CONFIG_TRAVERSE_ORDER(0x0) | VIVS_CL_CONFIG_SWATH_SIZE_X(0x0) | VIVS_CL_CONFIG_SWATH_SIZE_Y(0x0) | VIVS_CL_CONFIG_SWATH_SIZE_Z(0x0) | VIVS_CL_CONFIG_VALUE_ORDER(0x3));
