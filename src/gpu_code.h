@@ -6,10 +6,16 @@
 #include <etnaviv_drmif.h>
 #include <stdint.h>
 
-#define GPU_CODE(x) {x, ARRAY_SIZE(x), NULL}
+/* provide GPU code inline */
+#define GPU_CODE(x) {x, ARRAY_SIZE(x), NULL, 0, NULL}
+/* provide GPU code inline with constants */
+#define GPU_CODE_UNIFORMS(x, y) {x, ARRAY_SIZE(x), y, ARRAY_SIZE(y), NULL}
+
 struct gpu_code {
     const uint32_t *code;
     unsigned size;
+    const uint32_t *uniforms;
+    unsigned uniforms_size;
     struct etna_bo *bo; /* Cached bo */
 };
 

@@ -85,3 +85,21 @@ void drm_test_teardown(struct drm_test_info *info)
     free(info);
 }
 
+enum hardware_type drm_cl_get_hardware_type(struct drm_test_info *info)
+{
+    uint64_t val;
+    enum hardware_type hwt = HWT_OTHER;
+    if (etna_gpu_get_param(info->gpu, ETNA_GPU_MODEL, &val)) {
+        fprintf(stderr, "Could not get GPU model\n");
+        goto error;
+    }
+    switch (val) {
+    case 0x2000: printf("  Model: GC2000\n"); hwt = HWT_GC2000; break;
+    case 0x3000: printf("  Model: GC3000\n"); hwt = HWT_GC3000; break;
+    default:
+        fprintf(stderr, "Do not know how to handle GPU model %08x\n", (uint32_t)val);
+        goto error;
+    }
+error:
+    return hwt;
+}

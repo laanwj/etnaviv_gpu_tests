@@ -22,28 +22,17 @@
 #include "cmdstream.h"
 #include "memutil.h"
 #include "float_helpers.h"
+#include "gpu_code.h"
 
 #include "state.xml.h"
 #include "state_3d.xml.h"
 #include "common.xml.h"
-
-#define GPU_CODE(x) {x, ARRAY_SIZE(x)}
-struct gpu_code {
-    const uint32_t *code;
-    unsigned size;
-};
 
 enum compare_type {
     CT_INT32,
     CT_INT32_BCAST,
     CT_FLOAT32,
     CT_FLOAT32_BCAST
-};
-
-enum hardware_type {
-    HWT_GC2000 = 1,
-    HWT_GC3000 = 2,
-    HWT_ALL = 3,
 };
 
 struct op_test {
@@ -761,22 +750,15 @@ int main(int argc, char *argv[])
 {
     srand(time(NULL));
     struct drm_test_info *info;
-    uint64_t val;
-    enum hardware_type hwt = HWT_GC2000;
+    enum hardware_type hwt;
     if ((info = drm_test_setup(argc, argv)) == NULL) {
         return 1;
     }
-    if (etna_gpu_get_param(info->gpu, ETNA_GPU_MODEL, &val)) {
-        fprintf(stderr, "Could not get GPU model\n");
-        goto error;
+    hwt = drm_cl_get_hardware_type(info);
+    if (hwt == HWT_OTHER) {
+        return 1;
     }
-    switch (val) {
-    case 0x2000: printf("  Model: GC2000\n"); hwt = HWT_GC2000; break;
-    case 0x3000: printf("  Model: GC3000\n"); hwt = HWT_GC3000; break;
-    default:
-        fprintf(stderr, "Do not know how to handle GPU model %08x\n", (uint32_t)val);
-        goto error;
-    }
+
     /* TODO real argument parsing */
     const char *only_test = NULL;
     int reps = 100;

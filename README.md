@@ -53,4 +53,18 @@ Example output:
     xor.u32: PASS
     not.u32: PASS
 
+### etnaviv_cl_bench
+
+Executes various CL shader benchmarks.
+
+The goal is to figure out how the use of various instructions impacts
+performance.
+
+However currently they all measure memory throughput.
+
+Example output:
+
+    [read]    [ram]    Speed: 113.606 MB/s
+    [readacc] [ram]    Speed:  82.522 MB/s
+    [write]   [ram]    Speed: 234.779 MB/s
 
