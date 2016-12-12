@@ -465,11 +465,7 @@ struct op_test op_tests[] = {
             0x07841018, 0x00200000, 0x80010000, 0x00390028, /* leadzero.u32  t4, void, void, t2 */
         }))
     },
-    {"popcount.u32", HWT_GC2000, CT_INT32_BCAST, i32_generate_values_h, NULL, (void*)popcountu32_compute_cpu,
-        GPU_CODE(((uint32_t[]){
-            0x07841021, 0x00200000, 0x80010000, 0x00390028, /* popcount.u32    t4, void, void, t2 */
-        }))
-    },
+    /* No popcount on GC2000 */
 
     /** Conversion instructions - GC2000 */
     {"f2i.s32", HWT_GC2000, CT_INT32_BCAST, i32_generate_values_h, NULL, (void*)f2i_s32_compute_cpu,
