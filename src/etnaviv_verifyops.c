@@ -75,23 +75,10 @@ struct gpu_code postlude = GPU_CODE(((uint32_t[]){
 
 static const char *COMPS = "xyzw";
 
-#define MAX_INST 1024
-static void gen_cmd_stream(enum hardware_type hwt, struct etna_cmd_stream *stream, struct gpu_code *gpu_code, struct etna_bo *bo_code, struct etna_bo *out, struct etna_bo *in0, struct etna_bo *in1, uint32_t *auxin)
+static void gen_cmd_stream(enum hardware_type hwt, struct etna_cmd_stream *stream, struct gpu_code *gpu_code, struct etna_bo *out, struct etna_bo *in0, struct etna_bo *in1, uint32_t *auxin)
 {
-    unsigned num_inst;
-    uint32_t code[MAX_INST*4];
-    unsigned code_ptr = 0;
     unsigned uniform_base = 0;
-
-    for (unsigned i=0; i<prelude.size; ++i)
-        code[code_ptr++] = prelude.code[i];
-    for (unsigned i=0; i<gpu_code->size; ++i)
-        code[code_ptr++] = gpu_code->code[i];
-    for (unsigned i=0; i<postlude.size; ++i)
-        code[code_ptr++] = postlude.code[i];
-    assert((code_ptr & 3)==0);
-    num_inst = code_ptr / 4; /* number of instructions including final nop */
-    memcpy(etna_bo_map(bo_code), code, code_ptr * 4); /* upload for gc3000 */
+    unsigned inst_range_max = gpu_code->size / 4 - 2;
 
     etna_set_state(stream, VIVS_PA_SYSTEM_MODE, VIVS_PA_SYSTEM_MODE_UNK0 | VIVS_PA_SYSTEM_MODE_UNK4);
     etna_set_state(stream, VIVS_GL_API_MODE, VIVS_GL_API_MODE_OPENCL);
@@ -108,13 +95,14 @@ static void gen_cmd_stream(enum hardware_type hwt, struct etna_cmd_stream *strea
         /* GC3000: unified uniforms, shader instructions in memory */
         uniform_base = VIVS_SH_UNIFORMS(0);
         etna_set_state(stream, VIVS_VS_ICACHE_CONTROL, 0x21);
-        etna_set_state_from_bo(stream, VIVS_PS_INST_ADDR, bo_code, ETNA_RELOC_READ);
+        assert(gpu_code->bo);
+        etna_set_state_from_bo(stream, VIVS_PS_INST_ADDR, gpu_code->bo, ETNA_RELOC_READ);
 
     } else if (hwt == HWT_GC2000) {
         /* GC2000: VS uniforms, shader instructions on-chip */
         uniform_base = VIVS_VS_UNIFORMS(0);
-        for (unsigned i=0; i<code_ptr; ++i)
-            etna_set_state(stream, VIVS_SH_INST_MEM(i), code[i]);
+        for (unsigned i=0; i<gpu_code->size; ++i)
+            etna_set_state(stream, VIVS_SH_INST_MEM(i), gpu_code->code[i]);
     }
 
     /* Set uniforms */
@@ -144,7 +132,7 @@ static void gen_cmd_stream(enum hardware_type hwt, struct etna_cmd_stream *strea
     } else if (hwt == HWT_GC2000) {
         etna_set_state(stream, VIVS_VS_NEW_UNK00860, 0x0);
     }
-    etna_set_state(stream, VIVS_VS_RANGE, VIVS_VS_RANGE_LOW(0x0) | VIVS_VS_RANGE_HIGH(num_inst - 2));
+    etna_set_state(stream, VIVS_VS_RANGE, VIVS_VS_RANGE_LOW(0x0) | VIVS_VS_RANGE_HIGH(inst_range_max));
     etna_set_state(stream, VIVS_VS_LOAD_BALANCING, VIVS_VS_LOAD_BALANCING_A(0x42) | VIVS_VS_LOAD_BALANCING_B(0x5) | VIVS_VS_LOAD_BALANCING_C(0x3f) | VIVS_VS_LOAD_BALANCING_D(0xf));
     etna_set_state(stream, VIVS_VS_OUTPUT_COUNT, 1);
 
@@ -184,7 +172,7 @@ static void gen_cmd_stream(enum hardware_type hwt, struct etna_cmd_stream *strea
         etna_set_state(stream, VIVS_RA_CONTROL, VIVS_RA_CONTROL_UNK0);
         etna_set_state(stream, VIVS_PS_UNIFORM_BASE, 0x0);
         /* GC3000 uses the PS_RANGE instead of VS_RANGE for marking the CL shader instruction range */
-        etna_set_state(stream, VIVS_PS_RANGE, VIVS_PS_RANGE_LOW(0x0) | VIVS_PS_RANGE_HIGH(num_inst - 2));
+        etna_set_state(stream, VIVS_PS_RANGE, VIVS_PS_RANGE_LOW(0x0) | VIVS_PS_RANGE_HIGH(inst_range_max));
         /* GC3000: Needs PS output register */
         etna_set_state(stream, VIVS_PS_OUTPUT_REG, 0x0);
         /* Load balancing set differently for GC3000 */
@@ -255,7 +243,7 @@ void i32_generate_values_v4(size_t seed, void *b, size_t height)
    difference from GC3000 here:
    - NaN is is converted to 0x80000000/0x7fffffff instead of 0x00000000
  */
-inline int32_t f2i_s32_gc2000(float f)
+static inline int32_t f2i_s32_gc2000(float f)
 {
     if (isnan(f)) {
         uint32_t u = fui(f);
@@ -268,7 +256,7 @@ inline int32_t f2i_s32_gc2000(float f)
         return f;
     }
 }
-inline uint32_t f2i_u32_gc2000(float f)
+static inline uint32_t f2i_u32_gc2000(float f)
 {
     if (isnan(f)) {
         uint32_t u = fui(f);
@@ -637,6 +625,22 @@ bool compare_float(uint32_t a, uint32_t b)
     return false;
 }
 
+#define MAX_INST 1024
+struct gpu_code *build_test_gpu_code(enum hardware_type hwt, struct op_test *test)
+{
+    uint32_t code[MAX_INST*4];
+    unsigned code_ptr = 0;
+
+    for (unsigned i=0; i<prelude.size; ++i)
+        code[code_ptr++] = prelude.code[i];
+    for (unsigned i=0; i<test->gpu_code.size; ++i)
+        code[code_ptr++] = test->gpu_code.code[i];
+    for (unsigned i=0; i<postlude.size; ++i)
+        code[code_ptr++] = postlude.code[i];
+
+    return gpu_code_new(code, code_ptr);
+}
+
 int perform_test(enum hardware_type hwt, struct drm_test_info *info, struct op_test *cur_test, int repeats)
 {
     int retval = -1;
@@ -644,17 +648,17 @@ int perform_test(enum hardware_type hwt, struct drm_test_info *info, struct op_t
     const size_t width = 16;
     const size_t height = 16;
     size_t seedx, seedy;
-    struct etna_bo *bo_out=0, *bo_in0=0, *bo_in1=0, *bo_code=0;
+    struct etna_bo *bo_out=0, *bo_in0=0, *bo_in1=0;
     unsigned int errors = 0;
 
     size_t out_size = width * height * unit_size;
     size_t in0_size = width * unit_size;
     size_t in1_size = height * unit_size;
-    size_t max_code_size = MAX_INST * 16;
 
     void *out_cpu = malloc(out_size);
     void *a_cpu = malloc(in0_size);
     void *b_cpu = malloc(in1_size);
+    struct gpu_code *test_code = NULL;
     memset(out_cpu, 0, out_size);
     memset(a_cpu, 0, in0_size);
     memset(b_cpu, 0, in1_size);
@@ -665,11 +669,16 @@ int perform_test(enum hardware_type hwt, struct drm_test_info *info, struct op_t
     bo_out = etna_bo_new(info->dev, out_size, DRM_ETNA_GEM_CACHE_UNCACHED);
     bo_in0 = etna_bo_new(info->dev, in0_size, DRM_ETNA_GEM_CACHE_UNCACHED);
     bo_in1 = etna_bo_new(info->dev, in1_size, DRM_ETNA_GEM_CACHE_UNCACHED);
-    bo_code = etna_bo_new(info->dev, max_code_size, DRM_ETNA_GEM_CACHE_UNCACHED);
     if (!bo_in0 || !bo_in1 || !bo_out) {
         fprintf(stderr, "Unable to allocate buffer\n");
         goto out;
     }
+
+    test_code = build_test_gpu_code(hwt, cur_test);
+    if (hwt == HWT_GC3000) {
+        gpu_code_alloc_bo(test_code, info->dev);
+    }
+
     for (int num_tries=0; num_tries<repeats && !errors; ++num_tries) {
         seedx = rand();
         seedy = rand();
@@ -683,7 +692,7 @@ int perform_test(enum hardware_type hwt, struct drm_test_info *info, struct op_t
         memcpy(etna_bo_map(bo_in1), b_cpu, in1_size);
 
         /* generate command sequence */
-        gen_cmd_stream(hwt, info->stream, &cur_test->gpu_code, bo_code, bo_out, bo_in0, bo_in1, cur_test->auxin);
+        gen_cmd_stream(hwt, info->stream, test_code, bo_out, bo_in0, bo_in1, cur_test->auxin);
         /* execute command sequence */
         etna_cmd_stream_finish(info->stream);
 
@@ -740,6 +749,7 @@ out:
     etna_bo_del(bo_out);
     etna_bo_del(bo_in0);
     etna_bo_del(bo_in1);
+    gpu_code_destroy(test_code);
 
     free(out_cpu);
     free(a_cpu);
