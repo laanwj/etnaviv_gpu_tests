@@ -29,8 +29,10 @@ if test "x$have_libdrm" != xyes; then
    AC_MSG_ERROR([$1 requires libdrm_etnaviv >= $LIBDRM_ETNAVIV_REQUIRED])
 fi
 
+AC_CHECK_LIB([m], [exp2f])
+
 # Flags
-CFLAGS="$CFLAGS -Wall -Wextra -O2 -g -std=c99"
+CFLAGS="$CFLAGS -Wall -Wextra -O2 -g -std=c99 -Wno-unused-parameter -Wno-unused-function -Wno-missing-field-initializers"
 
 # Generate makefiles
 AC_CONFIG_FILES([Makefile src/Makefile])
