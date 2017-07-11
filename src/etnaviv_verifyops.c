@@ -226,6 +226,20 @@ void i32_generate_values_v4(size_t seed, void *b, size_t height)
     }
 }
 
+/* Generate values for testing logarithm.
+   (positive, integral)
+  */
+void f32_generate_values_h_log(size_t seed, void *a, size_t width)
+{
+    float base = seed * width;
+    for (size_t x=0; x<width; ++x) {
+        ((float*)a)[x*4+0] = base + x;
+        ((uint32_t*)a)[x*4+1] = 0x51515151; /* fill other vector elements with recognizable random pattern */
+        ((uint32_t*)a)[x*4+2] = 0x15151515;
+        ((uint32_t*)a)[x*4+3] = 0x36363636;
+    }
+}
+
 /** CPU-side helper emulation functions */
 
 /* Float to integer conversion emulation for GC2000. There is a significant
@@ -367,6 +381,8 @@ CPU_COMPUTE_FUNC1_MULTI(popcountu32_4w_compute_cpu, uint32_t, __builtin_popcount
 /* float */
 CPU_COMPUTE_FUNC1_MULTI(addf32_compute_cpu, float, AI(i) + BI(i));
 CPU_COMPUTE_FUNC1_MULTI(mulf32_compute_cpu, float, AI(i) * BI(i));
+CPU_COMPUTE_FUNC1_BCAST(expf32_compute_cpu, float, exp2f(A));
+CPU_COMPUTE_FUNC1_BCAST(logf32_compute_cpu, float, log2f(A));
 /* conversion between float and int (GC2000) */
 CPU_COMPUTE_FUNC1_CVT_BCAST(f2i_s32_compute_cpu, int32_t, float, f2i_s32_gc2000(A));
 CPU_COMPUTE_FUNC1_CVT_BCAST(f2i_u32_compute_cpu, uint32_t, float, f2i_u32_gc2000(A));
@@ -571,6 +587,19 @@ struct op_test op_tests[] = {
     {"add.f32", HWT_ALL, CT_FLOAT32, i32_generate_values_h4, i32_generate_values_v4, (void*)addf32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x07841001, 0x39002800, 0x00000000, 0x00390038, /* add           t4, t2, void, t3 */
+        }))
+    },
+    {"exp.f32", HWT_ALL, CT_FLOAT32, i32_generate_values_h, NULL, (void*)expf32_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x07841011, 0x00000000, 0x00000000, 0x00390028,  /* exp t4, void, void, t2 */
+        }))
+    },
+    /* currently only testing logarithm for positive numbers,
+       TODO: check how negative/invalid values are handled.
+     */
+    {"log.f32", HWT_ALL, CT_FLOAT32, f32_generate_values_h_log, NULL, (void*)logf32_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+            0x07841012, 0x00000000, 0x00000000, 0x00390028,  /* log t4, void, void, t2 */
         }))
     },
 };
