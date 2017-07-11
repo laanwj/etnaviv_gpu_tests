@@ -597,9 +597,16 @@ struct op_test op_tests[] = {
     /* currently only testing logarithm for positive numbers,
        TODO: check how negative/invalid values are handled.
      */
-    {"log.f32", HWT_ALL, CT_FLOAT32, f32_generate_values_h_log, NULL, (void*)logf32_compute_cpu,
+    {"log.f32", HWT_GC2000, CT_FLOAT32, f32_generate_values_h_log, NULL, (void*)logf32_compute_cpu,
         GPU_CODE(((uint32_t[]){
             0x07841012, 0x00000000, 0x00000000, 0x00390028,  /* log t4, void, void, t2 */
+        }))
+    },
+    /* gc3000 has a different sequence for LOG */
+    {"log.f32", HWT_GC3000, CT_FLOAT32, f32_generate_values_h_log, NULL, (void*)logf32_compute_cpu,
+        GPU_CODE(((uint32_t[]){
+	    0x01841012, 0x00000001, 0x00000000, 0x00390028,  /* log   t4.xy__, void, void, t2 ; tex not used but fields non-zero (id=0,amode=1,swiz=0) */
+	    0x07841003, 0x00004800, 0x00aa0240, 0x00000000,  /* mul   t4, t4.xxxx, t4.yyyy, void */
         }))
     },
 };
