@@ -802,8 +802,5 @@ int main(int argc, char *argv[])
 
     drm_test_teardown(info);
     return 0;
-error:
-    drm_test_teardown(info);
-    return 1;
 }
 
