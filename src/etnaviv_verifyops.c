@@ -117,9 +117,9 @@ static void gen_cmd_stream(enum hardware_type hwt, struct etna_cmd_stream *strea
     etna_set_state(stream, VIVS_VS_OUTPUT(0), VIVS_VS_OUTPUT_O0(0) | VIVS_VS_OUTPUT_O1(0) | VIVS_VS_OUTPUT_O2(0) | VIVS_VS_OUTPUT_O3(0));
     /* Unknown state set differently for GC2000 and GC3000 */
     if (hwt == HWT_GC3000) {
-        etna_set_state(stream, VIVS_VS_NEW_UNK00860, 0x1011); /* PS/VS units? */
+        etna_set_state(stream, VIVS_VS_UNIFORM_CACHE, 0x1011); /* PS/VS units? */
     } else if (hwt == HWT_GC2000) {
-        etna_set_state(stream, VIVS_VS_NEW_UNK00860, 0x0);
+        etna_set_state(stream, VIVS_VS_UNIFORM_CACHE, 0x0);
     }
     etna_set_state(stream, VIVS_VS_RANGE, VIVS_VS_RANGE_LOW(0x0) | VIVS_VS_RANGE_HIGH(inst_range_max));
     etna_set_state(stream, VIVS_VS_LOAD_BALANCING, VIVS_VS_LOAD_BALANCING_A(0x42) | VIVS_VS_LOAD_BALANCING_B(0x5) | VIVS_VS_LOAD_BALANCING_C(0x3f) | VIVS_VS_LOAD_BALANCING_D(0xf));

@@ -47,13 +47,13 @@ static void gen_cmd_stream(struct etna_cmd_stream *stream, struct etna_bo *code,
 {
     etna_set_state(stream, VIVS_PA_SYSTEM_MODE, VIVS_PA_SYSTEM_MODE_UNK0 | VIVS_PA_SYSTEM_MODE_UNK4);
     etna_set_state(stream, VIVS_GL_API_MODE, VIVS_GL_API_MODE_OPENCL);
-    etna_set_state(stream, VIVS_VS_NEW_UNK00860, 0x1000);
+    etna_set_state(stream, VIVS_VS_UNIFORM_CACHE, 0x1000);
 
     etna_set_state(stream, VIVS_PS_INPUT_COUNT, VIVS_PS_INPUT_COUNT_COUNT(1) | VIVS_PS_INPUT_COUNT_UNK8(31));
     etna_set_state(stream, VIVS_PS_TEMP_REGISTER_CONTROL, VIVS_PS_TEMP_REGISTER_CONTROL_NUM_TEMPS(4));
     etna_set_state(stream, VIVS_VS_OUTPUT_COUNT, 0);
     etna_set_state(stream, VIVS_CL_UNK00924, 0x0);
-    etna_set_state(stream, VIVS_VS_NEW_UNK00860, 0x1011);
+    etna_set_state(stream, VIVS_VS_UNIFORM_CACHE, 0x1011);
     etna_set_state_from_bo(stream, VIVS_SH_UNIFORMS(0), bmp, ETNA_RELOC_WRITE);
     etna_stall(stream, SYNC_RECIPIENT_FE, SYNC_RECIPIENT_PE);
     etna_set_state(stream, VIVS_RA_CONTROL, VIVS_RA_CONTROL_UNK0);
@@ -61,7 +61,7 @@ static void gen_cmd_stream(struct etna_cmd_stream *stream, struct etna_bo *code,
     etna_set_state(stream, VIVS_PS_TEMP_REGISTER_CONTROL, VIVS_PS_TEMP_REGISTER_CONTROL_NUM_TEMPS(4));
     etna_set_state(stream, VIVS_GL_VARYING_NUM_COMPONENTS, VIVS_GL_VARYING_NUM_COMPONENTS_VAR0(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR1(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR2(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR3(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR4(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR5(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR6(0x0) | VIVS_GL_VARYING_NUM_COMPONENTS_VAR7(0x0));
     etna_set_state(stream, VIVS_GL_UNK03834, 0x0);
-    etna_set_state(stream, VIVS_VS_NEW_UNK00860, 0x1011);
+    etna_set_state(stream, VIVS_VS_UNIFORM_CACHE, 0x1011);
     etna_set_state(stream, VIVS_PS_UNIFORM_BASE, 0x0);
     etna_set_state(stream, VIVS_SH_UNIFORMS(1), 0x0);
     etna_set_state(stream, VIVS_VS_ICACHE_CONTROL, 0x21);
