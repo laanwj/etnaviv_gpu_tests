@@ -1,7 +1,8 @@
 bin_PROGRAMS = etnaviv_cl_test_gc2000 \
 		etnaviv_cl_test_gc3000 \
 		etnaviv_verifyops \
-		etnaviv_cl_bench
+		etnaviv_cl_bench \
+		etnaviv_triangle_gc3000
 
 EXTRA_LIBRARIES = shared.a
 
@@ -23,3 +24,7 @@ etnaviv_verifyops_CFLAGS = $(LIBDRM_CFLAGS) $(LIBDRM_ETNAVIV_CFLAGS)
 etnaviv_cl_bench_SOURCES = etnaviv_cl_bench.c
 etnaviv_cl_bench_LDADD = shared.a $(LIBDRM_LIBS) $(LIBDRM_ETNAVIV_LIBS)
 etnaviv_cl_bench_CFLAGS = $(LIBDRM_CFLAGS) $(LIBDRM_ETNAVIV_CFLAGS)
+
+etnaviv_triangle_gc3000_SOURCES = triangle_gc3000.c
+etnaviv_triangle_gc3000_LDADD = shared.a $(LIBDRM_LIBS) $(LIBDRM_ETNAVIV_LIBS)
+etnaviv_triangle_gc3000_CFLAGS = $(LIBDRM_CFLAGS) $(LIBDRM_ETNAVIV_CFLAGS)

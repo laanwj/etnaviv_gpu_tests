@@ -16,3 +16,4 @@ src/etnaviv_cl_test_gc2000
 src/etnaviv_cl_test_gc3000
 src/etnaviv_verifyops
 src/etnaviv_cl_bench
+src/etnaviv_triangle_gc3000
