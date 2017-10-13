@@ -155,7 +155,7 @@ static void build_frame_cmdbuf(struct etna_cmd_stream *stream, struct attachment
     etna_set_state_reloc(stream, VIVS_TS_COLOR_STATUS_BASE, &at->color_status_base);
     etna_set_state_reloc(stream, VIVS_TS_COLOR_SURFACE_BASE, &at->color_surface_base);
     etna_set_state(stream, VIVS_TS_COLOR_CLEAR_VALUE, 0xff808080);
-    etna_set_state(stream, VIVS_RS_UNK016BC, 0xff808080);
+    etna_set_state(stream, VIVS_TS_COLOR_CLEAR_VALUE_EXT, 0xff808080);
     etna_set_state(stream, VIVS_TS_MEM_CONFIG, 0x00000022);
     etna_set_state(stream, VIVS_GL_FLUSH_CACHE, 0x00000001);
     etna_set_state(stream, VIVS_DUMMY_DUMMY, 0x00000000);
@@ -172,8 +172,8 @@ static void build_frame_cmdbuf(struct etna_cmd_stream *stream, struct attachment
     etna_set_state_reloc(stream, VIVS_NFE_VERTEX_STREAMS_BASE_ADDR(0), &at->stream_base);
     etna_set_state(stream, VIVS_NFE_VERTEX_STREAMS_CONTROL(0), 0x00000020);
     etna_set_state(stream, VIVS_NFE_VERTEX_STREAMS_UNK14680(0), 0x00000000);
-    etna_set_state(stream, VIVS_FE_UNK00780(0), 0x3f800000);
-    etna_set_state(stream, VIVS_FE_UNK00780(1), 0x3f800000);
+    etna_set_state(stream, VIVS_FE_GENERIC_ATTRIB_SCALE(0), 0x3f800000);
+    etna_set_state(stream, VIVS_FE_GENERIC_ATTRIB_SCALE(1), 0x3f800000);
     // How to emit 0 address?
     //etna_set_state_reloc(stream, VIVS_FE_INDEX_STREAM_BASE_ADDR, 0x00000000);
     etna_set_state(stream, VIVS_FE_INDEX_STREAM_CONTROL, 0x00000000);
@@ -305,10 +305,10 @@ static void build_frame_cmdbuf(struct etna_cmd_stream *stream, struct attachment
     etna_set_state_reloc(stream, VIVS_TS_COLOR_STATUS_BASE, &at->color_status_base);
     etna_set_state_reloc(stream, VIVS_TS_COLOR_SURFACE_BASE, &at->color_surface_base);
     etna_set_state(stream, VIVS_TS_COLOR_CLEAR_VALUE, 0xff808080);
-    etna_set_state(stream, VIVS_RS_UNK016BC, 0xff808080);
+    etna_set_state(stream, VIVS_TS_COLOR_CLEAR_VALUE_EXT, 0xff808080);
     etna_set_state(stream, VIVS_RS_EXTRA_CONFIG, 0x10000000);
     etna_set_state(stream, VIVS_RS_SOURCE_STRIDE, 0x80005000);
-    etna_set_state(stream, VIVS_RS_UNK016B0, 0x00010400);
+    etna_set_state(stream, VIVS_RS_KICKER_INPLACE, 0x00010400);
     etna_set_state(stream, VIVS_GL_FLUSH_CACHE, 0x00000002);
     etna_set_state(stream, VIVS_DUMMY_DUMMY, 0x00000000);
     etna_set_state(stream, VIVS_TS_MEM_CONFIG, 0x00000041);

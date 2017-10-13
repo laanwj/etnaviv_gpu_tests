@@ -181,7 +181,7 @@ struct gpu_code readacc_bench_code_gc2000 = GPU_CODE_UNIFORMS(((uint32_t[]){
 static void gen_cmd_stream_gc3000(struct etna_cmd_stream *stream, struct gpu_code *gpu_code,
         struct etna_bo *bmp, uint32_t out_gpu_addr)
 {
-    etna_set_state(stream, VIVS_PA_SYSTEM_MODE, VIVS_PA_SYSTEM_MODE_UNK0 | VIVS_PA_SYSTEM_MODE_UNK4);
+    etna_set_state(stream, VIVS_PA_SYSTEM_MODE, VIVS_PA_SYSTEM_MODE_PROVOKING_VERTEX_LAST | VIVS_PA_SYSTEM_MODE_HALF_PIXEL_CENTER);
     etna_set_state(stream, VIVS_GL_API_MODE, VIVS_GL_API_MODE_OPENCL);
     etna_set_state(stream, VIVS_VS_UNIFORM_CACHE, 0x1000);
 
@@ -243,7 +243,7 @@ static void gen_cmd_stream_gc3000(struct etna_cmd_stream *stream, struct gpu_cod
 static void gen_cmd_stream_gc2000(struct etna_cmd_stream *stream, struct gpu_code *gpu_code,
         struct etna_bo *bmp, uint32_t out_gpu_addr)
 {
-    etna_set_state(stream, VIVS_PA_SYSTEM_MODE, VIVS_PA_SYSTEM_MODE_UNK0 | VIVS_PA_SYSTEM_MODE_UNK4);
+    etna_set_state(stream, VIVS_PA_SYSTEM_MODE, VIVS_PA_SYSTEM_MODE_PROVOKING_VERTEX_LAST | VIVS_PA_SYSTEM_MODE_HALF_PIXEL_CENTER);
     etna_set_state(stream, VIVS_GL_API_MODE, VIVS_GL_API_MODE_OPENCL);
 
     etna_set_state(stream, VIVS_VS_INPUT_COUNT, VIVS_VS_INPUT_COUNT_COUNT(1) | VIVS_VS_INPUT_COUNT_UNK8(31));

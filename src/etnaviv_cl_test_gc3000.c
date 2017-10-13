@@ -45,7 +45,7 @@ uint32_t hello_code[] = {
 
 static void gen_cmd_stream(struct etna_cmd_stream *stream, struct etna_bo *code, struct etna_bo *bmp)
 {
-    etna_set_state(stream, VIVS_PA_SYSTEM_MODE, VIVS_PA_SYSTEM_MODE_UNK0 | VIVS_PA_SYSTEM_MODE_UNK4);
+    etna_set_state(stream, VIVS_PA_SYSTEM_MODE, VIVS_PA_SYSTEM_MODE_PROVOKING_VERTEX_LAST | VIVS_PA_SYSTEM_MODE_HALF_PIXEL_CENTER);
     etna_set_state(stream, VIVS_GL_API_MODE, VIVS_GL_API_MODE_OPENCL);
     etna_set_state(stream, VIVS_VS_UNIFORM_CACHE, 0x1000);
 

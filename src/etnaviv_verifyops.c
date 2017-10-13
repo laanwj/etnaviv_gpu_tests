@@ -69,7 +69,7 @@ static void gen_cmd_stream(enum hardware_type hwt, struct etna_cmd_stream *strea
     unsigned uniform_base = 0;
     unsigned inst_range_max = gpu_code->size / 4 - 2;
 
-    etna_set_state(stream, VIVS_PA_SYSTEM_MODE, VIVS_PA_SYSTEM_MODE_UNK0 | VIVS_PA_SYSTEM_MODE_UNK4);
+    etna_set_state(stream, VIVS_PA_SYSTEM_MODE, VIVS_PA_SYSTEM_MODE_PROVOKING_VERTEX_LAST | VIVS_PA_SYSTEM_MODE_HALF_PIXEL_CENTER);
     etna_set_state(stream, VIVS_GL_API_MODE, VIVS_GL_API_MODE_OPENCL);
 
     if (hwt == HWT_GC2000) {
