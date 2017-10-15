@@ -4,7 +4,8 @@ bin_PROGRAMS = etnaviv_cl_test_gc2000 \
 		etnaviv_cl_bench \
 		etnaviv_triangle_gc3000 \
 		etnaviv_cube_gc7000 \
-		etnaviv_bltdemo_gc7000
+		etnaviv_bltdemo_gc7000 \
+		etnaviv_blttest_gc7000
 
 EXTRA_LIBRARIES = libshared.a
 
@@ -38,3 +39,7 @@ etnaviv_cube_gc7000_CFLAGS = $(LIBDRM_CFLAGS) $(LIBDRM_ETNAVIV_CFLAGS)
 etnaviv_bltdemo_gc7000_SOURCES = bltdemo_gc7000.c
 etnaviv_bltdemo_gc7000_LDADD = libshared.a $(LIBDRM_LIBS) $(LIBDRM_ETNAVIV_LIBS)
 etnaviv_bltdemo_gc7000_CFLAGS = $(LIBDRM_CFLAGS) $(LIBDRM_ETNAVIV_CFLAGS)
+
+etnaviv_blttest_gc7000_SOURCES = blttest_gc7000.c
+etnaviv_blttest_gc7000_LDADD = libshared.a $(LIBDRM_LIBS) $(LIBDRM_ETNAVIV_LIBS)
+etnaviv_blttest_gc7000_CFLAGS = $(LIBDRM_CFLAGS) $(LIBDRM_ETNAVIV_CFLAGS)
