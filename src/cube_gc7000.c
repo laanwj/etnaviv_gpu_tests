@@ -8,6 +8,7 @@
 
 #include "drm_setup.h"
 #include "cmdstream.h"
+#include "etna_fb.h"
 
 #include <state.xml.h>
 #include <state_3d.xml.h>
@@ -38,6 +39,7 @@ struct test_info {
     struct etna_reloc ADDR_ICACHE_A; /* Vertex shader */
     struct etna_reloc ADDR_ICACHE_B; /* Pixel shader */
     struct etna_reloc ADDR_USER_A; /* Bitmap out */
+    struct fb_info *fb;
 };
 
 float vertex_data[] = {
@@ -180,8 +182,9 @@ void init_reloc(struct etna_reloc *reloc, struct etna_bo *bo, uint32_t offset, u
     reloc->flags = flags;
 }
 
-void test_init(struct etna_device *conn, struct test_info *info)
+struct test_info *test_init(struct etna_device *conn, int fbdev)
 {
+    struct test_info *info = CALLOC_STRUCT(test_info);
     assert(sizeof(vertex_data) == 0x360);
     assert(sizeof(vs_data) == 0x140);
     assert(sizeof(ps_data) == 0x10);
@@ -203,8 +206,10 @@ void test_init(struct etna_device *conn, struct test_info *info)
     assert(info->bo_vs);
     info->bo_ps = etna_bo_new(conn, sizeof(ps_data), DRM_ETNA_GEM_TYPE_IC);
     assert(info->bo_ps);
-    info->bo_bmp = etna_bo_new(conn, 0x7e9000, DRM_ETNA_GEM_TYPE_BMP);
-    assert(info->bo_bmp);
+    if (!fbdev) {
+        info->bo_bmp = etna_bo_new(conn, 0x7e9000, DRM_ETNA_GEM_TYPE_BMP);
+        assert(info->bo_bmp);
+    }
 
     /* Initialize relocs */
     init_reloc(&info->ADDR_RENDER_TARGET_A, info->bo_color, 0x0, ETNA_RELOC_READ|ETNA_RELOC_WRITE);
@@ -215,7 +220,9 @@ void test_init(struct etna_device *conn, struct test_info *info)
     init_reloc(&info->ADDR_TXDESC_A, info->bo_txdesc, 0x0, ETNA_RELOC_READ|ETNA_RELOC_WRITE);
     init_reloc(&info->ADDR_ICACHE_A, info->bo_vs, 0x0, ETNA_RELOC_READ|ETNA_RELOC_WRITE);
     init_reloc(&info->ADDR_ICACHE_B, info->bo_ps, 0x0, ETNA_RELOC_READ|ETNA_RELOC_WRITE);
-    init_reloc(&info->ADDR_USER_A, info->bo_bmp, 0x0, ETNA_RELOC_READ|ETNA_RELOC_WRITE);
+    if (!fbdev) {
+        init_reloc(&info->ADDR_USER_A, info->bo_bmp, 0x0, ETNA_RELOC_READ|ETNA_RELOC_WRITE);
+    }
 
     /* Initial content */
     memcpy(etna_bo_map(info->bo_vertex), vertex_data, sizeof(vertex_data));
@@ -223,7 +230,17 @@ void test_init(struct etna_device *conn, struct test_info *info)
     memcpy(etna_bo_map(info->bo_ps), ps_data, sizeof(ps_data));
     memcpy(etna_bo_map(info->bo_txdesc), txdesc_data, sizeof(txdesc_data));
 
-    memset(etna_bo_map(info->bo_bmp), 0, 0x7e9000);
+    if (!fbdev) {
+        memset(etna_bo_map(info->bo_bmp), 0, 0x7e9000);
+    } else {
+        int rv = fb_open(conn, 0, &info->fb);
+        assert(rv == 0);
+        /* HD or bust... */
+        assert(info->fb->width == 1920 && info->fb->height == 1080 && info->fb->rs_format==RS_FORMAT_A8R8G8B8);
+        fb_set_buffer(info->fb, 0);
+        info->ADDR_USER_A = info->fb->buffer[0];
+    }
+    return info;
 }
 
 void test_free(struct etna_device *conn, struct test_info *info)
@@ -237,6 +254,7 @@ void test_free(struct etna_device *conn, struct test_info *info)
     etna_bo_del(info->bo_vs);
     etna_bo_del(info->bo_ps);
     etna_bo_del(info->bo_bmp);
+    free(info);
 }
 
 void gen_cmdbuf_1(struct etna_cmd_stream *stream, struct test_info *info)
@@ -724,8 +742,10 @@ void gen_cmdbuf_2(struct etna_cmd_stream *stream, struct test_info *info)
 
 void save_result(struct test_info *info)
 {
-    char *bmp = etna_bo_map(info->bo_bmp);
-    bmp_dump32_ex(bmp, 1920, 1080, false, true, false, "/tmp/kube.bmp");
+    if (info->bo_bmp) {
+        char *bmp = etna_bo_map(info->bo_bmp);
+        bmp_dump32_ex(bmp, 1920, 1080, false, true, false, "/tmp/kube.bmp");
+    }
 }
 
 int main(int argc, char **argv)
@@ -747,10 +767,14 @@ int main(int argc, char **argv)
         goto error;
     }
 
-    struct test_info *tinfo = 0;
+    int fbdev = 0;
+    if (argc >= 3) {
+        fbdev = atoi(argv[2]);
+    }
+    printf("Using fb: %d\n", fbdev);
 
-    tinfo = CALLOC_STRUCT(test_info);
-    test_init(info->dev, tinfo);
+    struct test_info *tinfo = test_init(info->dev, fbdev);
+    assert(tinfo);
 
     printf("Submitting command buffer 1\n");
     gen_cmdbuf_1(info->stream, tinfo);
