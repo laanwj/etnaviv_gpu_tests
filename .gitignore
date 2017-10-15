@@ -18,3 +18,4 @@ src/etnaviv_verifyops
 src/etnaviv_cl_bench
 src/etnaviv_triangle_gc3000
 src/etnaviv_cube_gc7000
+src/etnaviv_bltdemo_gc7000

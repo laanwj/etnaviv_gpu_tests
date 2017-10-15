@@ -34,6 +34,8 @@
 #define ETNA_CALLOC_STRUCT_ARRAY(N, T)   (struct T *) calloc((N), sizeof(struct T))
 #define ETNA_FREE(_ptr) free(_ptr)
 
+#define COND(bool, val) ((bool) ? (val) : 0)
+
 /* align to a value divisable by granularity >= value, works only for powers of two */
 static inline uint32_t etna_align_up(uint32_t value, uint32_t granularity)
 {
@@ -100,6 +102,17 @@ static inline uint32_t etna_f32_to_fixp16(float f)
 static inline uint32_t etna_log2_fixp55(unsigned width)
 {
     return etna_float_to_fixp55(logf((float)width) * RCPLOG2);
+}
+
+/* clamp float to 0.0..1.0 */
+static inline float etna_clampf(float x)
+{
+    if (x < 0.0f)
+        return 0.0f;
+    else if (x > 1.0f)
+        return 1.0f;
+    else
+        return x;
 }
 
 #endif
