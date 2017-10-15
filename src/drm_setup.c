@@ -1,9 +1,29 @@
 #include "drm_setup.h"
 #include "memutil.h"
 
+#include <common.xml.h>
+
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
+
+/** Find first GPU with a 3D pipe */
+struct etna_gpu *find_suitable_gpu(struct etna_device *dev)
+{
+    int core_id = 0;
+    while (1) {
+        struct etna_gpu *gpu = etna_gpu_new(dev, core_id);
+        if (!gpu) { /* No more cores, stop */
+            return NULL;
+        }
+        uint64_t features = 0;
+        int rv = etna_gpu_get_param(gpu, ETNA_GPU_FEATURES_0, &features);
+        if (rv >= 0 && (features & chipFeatures_PIPE_3D)) {
+            return gpu;
+        }
+        etna_gpu_del(gpu);
+    }
+}
 
 struct drm_test_info *drm_test_setup(int argc, char **argv)
 {
@@ -37,13 +57,9 @@ struct drm_test_info *drm_test_setup(int argc, char **argv)
         goto out;
     }
 
-    /* TODO: we assume that core 1 is a 3D+CL capable one.
-     * This is pretty much only true for i.MX6q(p).
-     * If the tests don't work on your hardware check this carefully.
-     */
-    info->gpu = etna_gpu_new(info->dev, 1);
+    info->gpu = find_suitable_gpu(info->dev);
     if (!info->gpu) {
-        fprintf(stdout, "Unable to create gpu\n");
+        fprintf(stdout, "Unable to find gpu with 3D pipe\n");
         goto out_device;
     }
 
