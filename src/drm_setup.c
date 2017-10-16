@@ -1,7 +1,7 @@
 #include "drm_setup.h"
 #include "memutil.h"
 
-#include <common.xml.h>
+#include "hw/common.xml.h"
 
 #include <stdio.h>
 #include <fcntl.h>

@@ -3,9 +3,9 @@
 
 #include <etnaviv_drmif.h>
 
-#include "cmdstream.xml.h"
-#include "common.xml.h"
-#include "state.xml.h"
+#include "hw/cmdstream.xml.h"
+#include "hw/common.xml.h"
+#include "hw/state.xml.h"
 
 static inline void etna_emit_load_state(struct etna_cmd_stream *stream,
         const uint16_t offset, const uint16_t count, const int fixp)

@@ -38,7 +38,7 @@
 #include <linux/videodev2.h>
 #include <errno.h>
 
-#include <state_3d.xml.h>
+#include "hw/state_3d.xml.h"
 
 #ifdef ANDROID
 #define FBDEV_DEV "/dev/graphics/fb%i"

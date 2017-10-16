@@ -12,9 +12,9 @@
 #include "etna_fb.h"
 #include "etna_util.h"
 
-#include <state.xml.h>
-#include <state_3d.xml.h>
-#include <state_blt.xml.h>
+#include "hw/state.xml.h"
+#include "hw/state_3d.xml.h"
+#include "hw/state_blt.xml.h"
 
 #include <assert.h>
 #include <stdio.h>

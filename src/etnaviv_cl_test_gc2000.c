@@ -16,9 +16,9 @@
 #include "drm_setup.h"
 #include "cmdstream.h"
 
-#include "state.xml.h"
-#include "state_3d.xml.h"
-#include "common.xml.h"
+#include "hw/state.xml.h"
+#include "hw/state_3d.xml.h"
+#include "hw/common.xml.h"
 
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 

@@ -24,9 +24,9 @@
 #include "float_helpers.h"
 #include "gpu_code.h"
 
-#include "state.xml.h"
-#include "state_3d.xml.h"
-#include "common.xml.h"
+#include "hw/state.xml.h"
+#include "hw/state_3d.xml.h"
+#include "hw/common.xml.h"
 
 enum compare_type {
     CT_INT32,

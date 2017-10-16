@@ -17,9 +17,9 @@
 #include "cmdstream.h"
 #include "write_bmp.h"
 
-#include "state.xml.h"
-#include "state_3d.xml.h"
-#include "common.xml.h"
+#include "hw/state.xml.h"
+#include "hw/state_3d.xml.h"
+#include "hw/common.xml.h"
 
 /* TODO:
  * - process output (un-supertile resolve)
