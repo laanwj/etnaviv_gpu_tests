@@ -12,6 +12,7 @@
 #include "etna_fb.h"
 #include "etna_util.h"
 
+#include "hw/common_3d.xml.h"
 #include "hw/state.xml.h"
 #include "hw/state_3d.xml.h"
 #include "hw/state_blt.xml.h"
@@ -155,7 +156,7 @@ void emit_blt_clear(struct etna_cmd_stream *stream, struct blt_clear_op *op)
         VIVS_BLT_DEST_STRIDE_FORMAT(BLT_FORMAT_A4R4G4B4) |
         VIVS_BLT_DEST_STRIDE_STRIDE(op->stride);
     uint32_t img_config_bits =
-        BLT_IMAGE_CONFIG_CACHE_MODE_256 |
+        BLT_IMAGE_CONFIG_CACHE_MODE(TS_CACHE_MODE_256) |
         COND(op->use_ts, BLT_IMAGE_CONFIG_TS) |
         COND(op->compressed, BLT_IMAGE_CONFIG_COMPRESSION) |
         BLT_IMAGE_CONFIG_COMPRESSION_FORMAT(op->compress_fmt);
@@ -169,17 +170,17 @@ void emit_blt_clear(struct etna_cmd_stream *stream, struct blt_clear_op *op)
     assert(op->bpp);
     etna_set_state(stream, VIVS_BLT_CONFIG, VIVS_BLT_CONFIG_CLEAR_BPP(op->bpp-1));
     etna_set_state(stream, VIVS_BLT_DEST_STRIDE, stride_bits);
-    etna_set_state(stream, VIVS_BLT_DEST_CONFIG, img_config_bits | BLT_IMAGE_CONFIG_TO_SUPERTILED);
+    etna_set_state(stream, VIVS_BLT_DEST_CONFIG, img_config_bits | BLT_IMAGE_CONFIG_TO_SUPER_TILED);
     etna_set_state_reloc(stream, VIVS_BLT_DEST_ADDR, &op->addr);
     etna_set_state(stream, VIVS_BLT_SRC_STRIDE, stride_bits);
-    etna_set_state(stream, VIVS_BLT_SRC_CONFIG, img_config_bits | BLT_IMAGE_CONFIG_FROM_SUPERTILED);
+    etna_set_state(stream, VIVS_BLT_SRC_CONFIG, img_config_bits | BLT_IMAGE_CONFIG_FROM_SUPER_TILED);
     etna_set_state_reloc(stream, VIVS_BLT_SRC_ADDR, &op->addr);
     etna_set_state(stream, VIVS_BLT_DEST_POS, VIVS_BLT_DEST_POS_X(op->rect_x) | VIVS_BLT_DEST_POS_Y(op->rect_y));
     etna_set_state(stream, VIVS_BLT_IMAGE_SIZE, VIVS_BLT_IMAGE_SIZE_WIDTH(op->rect_w) | VIVS_BLT_IMAGE_SIZE_HEIGHT(op->rect_h));
     etna_set_state(stream, VIVS_BLT_CLEAR_COLOR0, op->clear_value[0]);
     etna_set_state(stream, VIVS_BLT_CLEAR_COLOR1, op->clear_value[1]);
-    etna_set_state(stream, VIVS_BLT_UNK1404C, 0xffffffff);
-    etna_set_state(stream, VIVS_BLT_UNK14050, 0xffffffff);
+    etna_set_state(stream, VIVS_BLT_SRC_TS_CLEAR_VALUE0, 0xffffffff);
+    etna_set_state(stream, VIVS_BLT_SRC_TS_CLEAR_VALUE1, 0xffffffff);
     if (op->use_ts) {
         etna_set_state_reloc(stream, VIVS_BLT_DEST_TS, &op->ts_addr);
         etna_set_state_reloc(stream, VIVS_BLT_SRC_TS, &op->ts_addr);

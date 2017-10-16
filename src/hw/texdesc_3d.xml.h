@@ -11,7 +11,7 @@ The rules-ng-ng source files this header was generated from are:
 - texdesc_3d.xml (   3146 bytes, from 2017-10-13 12:18:33)
 - copyright.xml  (   1597 bytes, from 2016-10-29 07:29:22)
 - common.xml     (  26193 bytes, from 2017-10-13 12:18:24)
-- common_3d.xml  (  12531 bytes, from 2017-10-13 11:04:24)
+- common_3d.xml  (  12636 bytes, from 2017-10-16 13:56:34)
 
 Copyright (C) 2012-2017 by the following authors:
 - Wladimir J. van der Laan <laanwj@gmail.com>
@@ -102,8 +102,7 @@ DEALINGS IN THE SOFTWARE.
 #define TEXDESC_CONFIG1_SWIZZLE_A(x)				(((x) << TEXDESC_CONFIG1_SWIZZLE_A__SHIFT) & TEXDESC_CONFIG1_SWIZZLE_A__MASK)
 #define TEXDESC_CONFIG1_CACHE_MODE__MASK			0x00800000
 #define TEXDESC_CONFIG1_CACHE_MODE__SHIFT			23
-#define TEXDESC_CONFIG1_CACHE_MODE_128				0x00000000
-#define TEXDESC_CONFIG1_CACHE_MODE_256				0x00800000
+#define TEXDESC_CONFIG1_CACHE_MODE(x)				(((x) << TEXDESC_CONFIG1_CACHE_MODE__SHIFT) & TEXDESC_CONFIG1_CACHE_MODE__MASK)
 #define TEXDESC_CONFIG1_TEXTURE_ARRAY				0x01000000
 #define TEXDESC_CONFIG1_UNK25					0x02000000
 #define TEXDESC_CONFIG1_HALIGN__MASK				0x1c000000

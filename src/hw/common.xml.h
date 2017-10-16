@@ -11,7 +11,7 @@ The rules-ng-ng source files this header was generated from are:
 - texdesc_3d.xml (   3146 bytes, from 2017-10-13 12:18:33)
 - copyright.xml  (   1597 bytes, from 2016-10-29 07:29:22)
 - common.xml     (  26193 bytes, from 2017-10-13 12:18:24)
-- common_3d.xml  (  12531 bytes, from 2017-10-13 11:04:24)
+- common_3d.xml  (  12636 bytes, from 2017-10-16 13:56:34)
 
 Copyright (C) 2012-2017 by the following authors:
 - Wladimir J. van der Laan <laanwj@gmail.com>

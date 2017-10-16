@@ -297,8 +297,8 @@ void gen_cmdbuf_1(struct etna_cmd_stream *stream, struct test_info *info)
     etna_set_state(stream, VIVS_BLT_IMAGE_SIZE, 0x04380780);
     etna_set_state(stream, VIVS_BLT_CLEAR_COLOR0, 0xff808080);
     etna_set_state(stream, VIVS_BLT_CLEAR_COLOR1, 0xff808080);
-    etna_set_state(stream, VIVS_BLT_UNK1404C, 0xffffffff);
-    etna_set_state(stream, VIVS_BLT_UNK14050, 0xffffffff);
+    etna_set_state(stream, VIVS_BLT_CLEAR_BITS0, 0xffffffff);
+    etna_set_state(stream, VIVS_BLT_CLEAR_BITS1, 0xffffffff);
     etna_set_state_reloc(stream, VIVS_BLT_DEST_TS, &info->ADDR_TILE_STATUS_B);
     etna_set_state_reloc(stream, VIVS_BLT_SRC_TS, &info->ADDR_TILE_STATUS_B);
     etna_set_state(stream, VIVS_BLT_DEST_TS_CLEAR_VALUE0, 0xff808080);
