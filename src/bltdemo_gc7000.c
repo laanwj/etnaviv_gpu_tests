@@ -6,7 +6,7 @@
 
 #include "write_bmp.h"
 #include "memutil.h"
-
+#include "etnaviv_blt.h"
 #include "drm_setup.h"
 #include "cmdstream.h"
 #include "etna_fb.h"
@@ -117,79 +117,6 @@ void gen_cmdbuf_2(struct etna_cmd_stream *stream, struct test_info *info)
     etna_set_state(stream, VIVS_GL_FLUSH_CACHE, 0x00000c23);
 }
 
-struct blt_clear_op
-{
-    struct etna_reloc addr;
-    struct etna_reloc ts_addr;
-    uint32_t bpp; /* bytes per pixel */
-    uint32_t stride;
-    bool compressed;
-    uint32_t compress_fmt;
-    uint32_t tiling;
-    uint16_t rect_x;
-    uint16_t rect_y;
-    uint16_t rect_w;
-    uint16_t rect_h;
-    uint32_t clear_value[2];
-    bool use_ts;
-    uint32_t ts_clear_value[2];
-};
-
-void emit_blt_clear(struct etna_cmd_stream *stream, const struct blt_clear_op *op)
-{
-    /* TODO figure out tilings */
-    uint32_t stride_bits =
-        VIVS_BLT_DEST_STRIDE_TILING(3) |
-        VIVS_BLT_DEST_STRIDE_FORMAT(BLT_FORMAT_A4R4G4B4) |
-        VIVS_BLT_DEST_STRIDE_STRIDE(op->stride);
-    uint32_t img_config_bits =
-        BLT_IMAGE_CONFIG_CACHE_MODE(TS_CACHE_MODE_256) |
-        COND(op->use_ts, BLT_IMAGE_CONFIG_TS) |
-        COND(op->compressed, BLT_IMAGE_CONFIG_COMPRESSION) |
-        BLT_IMAGE_CONFIG_COMPRESSION_FORMAT(op->compress_fmt);
-
-    etna_cmd_stream_reserve(stream, 64*2); /* Make sure BLT op doesn't get broken up */
-
-    etna_set_state(stream, VIVS_GL_FLUSH_CACHE, 0x00000c23);
-    etna_set_state(stream, VIVS_TS_FLUSH_CACHE, 0x00000001);
-
-    etna_set_state(stream, VIVS_BLT_ENABLE, 0x00000001);
-    assert(op->bpp);
-    etna_set_state(stream, VIVS_BLT_CONFIG, VIVS_BLT_CONFIG_CLEAR_BPP(op->bpp-1));
-    etna_set_state(stream, VIVS_BLT_DEST_STRIDE, stride_bits);
-    etna_set_state(stream, VIVS_BLT_DEST_CONFIG, img_config_bits | BLT_IMAGE_CONFIG_TO_SUPER_TILED);
-    etna_set_state_reloc(stream, VIVS_BLT_DEST_ADDR, &op->addr);
-    etna_set_state(stream, VIVS_BLT_SRC_STRIDE, stride_bits);
-    etna_set_state(stream, VIVS_BLT_SRC_CONFIG, img_config_bits | BLT_IMAGE_CONFIG_FROM_SUPER_TILED);
-    etna_set_state_reloc(stream, VIVS_BLT_SRC_ADDR, &op->addr);
-    etna_set_state(stream, VIVS_BLT_DEST_POS, VIVS_BLT_DEST_POS_X(op->rect_x) | VIVS_BLT_DEST_POS_Y(op->rect_y));
-    etna_set_state(stream, VIVS_BLT_IMAGE_SIZE, VIVS_BLT_IMAGE_SIZE_WIDTH(op->rect_w) | VIVS_BLT_IMAGE_SIZE_HEIGHT(op->rect_h));
-    etna_set_state(stream, VIVS_BLT_CLEAR_COLOR0, op->clear_value[0]);
-    etna_set_state(stream, VIVS_BLT_CLEAR_COLOR1, op->clear_value[1]);
-    etna_set_state(stream, VIVS_BLT_SRC_TS_CLEAR_VALUE0, 0xffffffff);
-    etna_set_state(stream, VIVS_BLT_SRC_TS_CLEAR_VALUE1, 0xffffffff);
-    if (op->use_ts) {
-        etna_set_state_reloc(stream, VIVS_BLT_DEST_TS, &op->ts_addr);
-        etna_set_state_reloc(stream, VIVS_BLT_SRC_TS, &op->ts_addr);
-        etna_set_state(stream, VIVS_BLT_DEST_TS_CLEAR_VALUE0, op->ts_clear_value[0]);
-        etna_set_state(stream, VIVS_BLT_DEST_TS_CLEAR_VALUE1, op->ts_clear_value[1]);
-        etna_set_state(stream, VIVS_BLT_SRC_TS_CLEAR_VALUE0, op->ts_clear_value[0]);
-        etna_set_state(stream, VIVS_BLT_SRC_TS_CLEAR_VALUE1, op->ts_clear_value[1]);
-    }
-    etna_set_state(stream, VIVS_BLT_SET_COMMAND, 0x00000003);
-    etna_set_state(stream, VIVS_BLT_COMMAND, VIVS_BLT_COMMAND_COMMAND_CLEAR_IMAGE);
-    etna_set_state(stream, VIVS_BLT_SET_COMMAND, 0x00000003);
-    etna_set_state(stream, VIVS_BLT_ENABLE, 0x00000000);
-#if 0
-    etna_set_state(stream, VIVS_BLT_ENABLE, 0x00000001);
-    etna_set_state(stream, VIVS_GL_SEMAPHORE_TOKEN, 0x00001005); /* Make RA wait for BLT */
-    etna_set_state(stream, VIVS_GL_STALL_TOKEN, 0x00001005);
-    etna_set_state(stream, VIVS_BLT_ENABLE, 0x00000000);
-#endif
-    etna_set_state(stream, VIVS_GL_FLUSH_CACHE, 0x00000002);
-    etna_set_state(stream, VIVS_DUMMY_DUMMY, 0x00000000);
-}
-
 #define NUM_BOGEYS 40
 struct bogey {
     int iw;
@@ -297,35 +224,46 @@ int main(int argc, char **argv)
 
         /* Clear framebuffer */
         struct blt_clear_op clr = {};
-        clr.addr = tinfo->ADDR_RENDER_TARGET_A;
-        clr.ts_addr = tinfo->ADDR_TILE_STATUS_B;
-        clr.bpp = 4;
-        clr.stride = 0x1e00;
-        clr.compressed = 1;
-        clr.compress_fmt = 3;
-        clr.tiling = 123; /* TODO */
+        clr.dest.addr = tinfo->ADDR_RENDER_TARGET_A;
+        clr.dest.ts_addr = tinfo->ADDR_TILE_STATUS_B;
+        clr.dest.bpp = 4;
+        clr.dest.stride = 0x1e00;
+        clr.dest.compressed = 1;
+        clr.dest.compress_fmt = 3;
+        clr.dest.tiling = ETNA_LAYOUT_SUPER_TILED;
+        clr.dest.use_ts = 1;
+        clr.dest.ts_clear_value[0] = tinfo->ts_clear_value[0];
+        clr.dest.ts_clear_value[1] = tinfo->ts_clear_value[1];
+        clr.dest.cache_mode = TS_CACHE_MODE_256;
+
+        clr.clear_value[0] = background;
+        clr.clear_value[1] = background;
+        clr.clear_bits[0] = 0xffffffff;
+        clr.clear_bits[1] = 0xffffffff;
         clr.rect_x = 0;
         clr.rect_y = 0;
         clr.rect_w = WIDTH;
         clr.rect_h = HEIGHT;
-        clr.clear_value[0] = background;
-        clr.clear_value[1] = background;
-        clr.use_ts = 1;
-        clr.ts_clear_value[0] = tinfo->ts_clear_value[0];
-        clr.ts_clear_value[1] = tinfo->ts_clear_value[1];
-        emit_blt_clear(info->stream, &clr);
+        emit_blt_clearimage(info->stream, &clr);
 
         /* Draw bouncing squares */
         for (unsigned i=0; i<NUM_BOGEYS; ++i) {
             struct blt_clear_op clr = {};
             struct bogey *b = &bogeys[i];
-            clr.addr = tinfo->ADDR_RENDER_TARGET_A;
-            clr.ts_addr = tinfo->ADDR_TILE_STATUS_B;
-            clr.bpp = 4;
-            clr.stride = 0x1e00;
-            clr.compressed = 1;
-            clr.compress_fmt = 3;
-            clr.tiling = 123; /* TODO */
+            clr.dest.addr = tinfo->ADDR_RENDER_TARGET_A;
+            clr.dest.ts_addr = tinfo->ADDR_TILE_STATUS_B;
+            clr.dest.bpp = 4;
+            clr.dest.stride = 0x1e00;
+            clr.dest.compressed = 1;
+            clr.dest.compress_fmt = 3;
+            clr.dest.tiling = ETNA_LAYOUT_SUPER_TILED;
+            clr.dest.use_ts = 1;
+            clr.dest.ts_clear_value[0] = tinfo->ts_clear_value[0];
+            clr.dest.ts_clear_value[1] = tinfo->ts_clear_value[1];
+            clr.dest.cache_mode = TS_CACHE_MODE_256;
+
+            clr.clear_value[0] = clr.clear_value[1] = b->color;
+            clr.clear_bits[0] = 0xffffffff; clr.clear_bits[1] = 0xffffffff;
             clr.rect_x = b->iposx;
             clr.rect_y = b->iposy;
             clr.rect_w = b->iw;
@@ -336,12 +274,8 @@ int main(int argc, char **argv)
             assert(clr.rect_h > 0);
             assert((clr.rect_x + clr.rect_w) <= WIDTH);
             assert((clr.rect_y + clr.rect_h) <= HEIGHT);
-            clr.clear_value[0] = clr.clear_value[1] = b->color;
-            clr.use_ts = 1;
-            clr.ts_clear_value[0] = tinfo->ts_clear_value[0];
-            clr.ts_clear_value[1] = tinfo->ts_clear_value[1];
 
-            emit_blt_clear(info->stream, &clr);
+            emit_blt_clearimage(info->stream, &clr);
         }
 
         /* Copy framebuffer to screen */

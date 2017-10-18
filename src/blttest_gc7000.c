@@ -6,7 +6,7 @@
 
 #include "write_bmp.h"
 #include "memutil.h"
-
+#include "etnaviv_blt.h"
 #include "drm_setup.h"
 #include "cmdstream.h"
 #include "etna_util.h"
@@ -56,27 +56,6 @@ void test_free(struct etna_device *conn, struct test_info *info)
 {
     etna_bo_del(info->bo_data);
     free(info);
-}
-
-void emit_blt_copybuffer(struct etna_cmd_stream *stream, struct etna_reloc *dest, struct etna_reloc *src, uint32_t size)
-{
-    etna_cmd_stream_reserve(stream, 64*2); /* Make sure BLT op doesn't get broken up */
-
-    etna_set_state(stream, VIVS_BLT_ENABLE, 0x00000001);
-    etna_set_state_reloc(stream, VIVS_BLT_SRC_ADDR, src);
-    etna_set_state_reloc(stream, VIVS_BLT_DEST_ADDR, dest);
-    etna_set_state(stream, VIVS_BLT_BUFFER_SIZE, size);
-    etna_set_state(stream, VIVS_BLT_SET_COMMAND, 0x00000003);
-    etna_set_state(stream, VIVS_BLT_COMMAND, VIVS_BLT_COMMAND_COMMAND_COPY_BUFFER);
-    etna_set_state(stream, VIVS_BLT_SET_COMMAND, 0x00000003);
-    etna_set_state(stream, VIVS_BLT_ENABLE, 0x00000000);
-
-    /* Synchronize FE with BLT, because we want to see result after finishing command buffer */
-    etna_set_state(stream, VIVS_BLT_ENABLE, 0x00000001);
-    etna_set_state(stream, VIVS_GL_SEMAPHORE_TOKEN, 0x30001001);
-    etna_cmd_stream_emit(stream, 0x48000000); /* command STALL (9) OP=STALL */
-    etna_cmd_stream_emit(stream, 0x30001001); /* command   TOKEN FROM=FE,TO=BLT,UNK28=0x3 */
-    etna_set_state(stream, VIVS_BLT_ENABLE, 0x00000000);
 }
 
 int main(int argc, char **argv)

@@ -10,7 +10,7 @@ bin_PROGRAMS = etnaviv_cl_test_gc2000 \
 
 EXTRA_LIBRARIES = libshared.a
 
-libshared_a_SOURCES = drm_setup.c gpu_code.c write_bmp.c etna_fb.c etnaviv_tiling.c
+libshared_a_SOURCES = drm_setup.c gpu_code.c write_bmp.c etna_fb.c etnaviv_tiling.c etnaviv_blt.c
 libshared_a_CFLAGS = $(LIBDRM_CFLAGS) $(LIBDRM_ETNAVIV_CFLAGS)
 
 etnaviv_cl_test_gc2000_SOURCES = etnaviv_cl_test_gc2000.c
